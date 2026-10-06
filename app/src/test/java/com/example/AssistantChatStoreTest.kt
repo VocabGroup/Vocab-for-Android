@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.assistant.AssistantChatStore
 import com.example.data.assistant.AssistantConversation
 import com.example.data.assistant.AssistantMessage
+import com.example.data.assistant.savedArticles
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -39,5 +40,13 @@ class AssistantChatStoreTest {
         store.save(listOf(conversation), listOf(message))
 
         assertEquals(message.attachmentUris, store.loadMessages().single().attachmentUris)
+    }
+
+    @Test fun articleLibraryLoadsAllSavedChatsWithoutOpeningOrGeneratingAnArticle() {
+        val chats = listOf(AssistantConversation("a", "舊對話", 1, 1), AssistantConversation("b", "另一對話", 2, 2))
+        val articles = listOf(AssistantMessage("article-a", "a", "ASSISTANT", "old article", 10, "ARTICLE", "{}"),
+            AssistantMessage("article-b", "b", "ASSISTANT", "new article", 20, "ARTICLE", "{}"))
+        store.save(chats, articles + AssistantMessage("text", "b", "ASSISTANT", "不是文章", 30))
+        assertEquals(listOf("article-b", "article-a"), store.loadMessages().savedArticles().map { it.id })
     }
 }

@@ -33,6 +33,11 @@ data class AssistantQuizOption(
     val correct: Boolean
 )
 
+/** Library history is independent of whichever chat is currently selected. */
+fun List<AssistantMessage>.savedArticles(): List<AssistantMessage> =
+    filter { it.role == "ASSISTANT" && it.kind == "ARTICLE" }
+        .distinctBy { it.id }.sortedByDescending { it.createdAt }
+
 data class AssistantQuizQuestion(
     val prompt: String,
     val explanation: String,

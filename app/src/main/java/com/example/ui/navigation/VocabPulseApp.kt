@@ -127,6 +127,7 @@ fun VocabApp(
     val ttsVoices by viewModel.ttsVoices.collectAsStateWithLifecycle()
     val assistantConversations by viewModel.assistantConversations.collectAsStateWithLifecycle()
     val assistantMessages by viewModel.assistantMessages.collectAsStateWithLifecycle()
+    val savedArticles by viewModel.savedArticles.collectAsStateWithLifecycle()
     val assistantCurrentConversationId by viewModel.assistantCurrentConversationId.collectAsStateWithLifecycle()
     val assistantBusy by viewModel.assistantBusy.collectAsStateWithLifecycle()
     val assistantStatus by viewModel.assistantStatus.collectAsStateWithLifecycle()
@@ -562,10 +563,9 @@ fun VocabApp(
                             onOpen = { record -> selectedWritingRecordId = record.id; navController.navigate(Routes.WRITING_RECORD_DETAIL) }
                         )
                     } else {
-                        val articles = assistantMessages.filter { it.role == "ASSISTANT" && it.kind == "ARTICLE" }.sortedByDescending { it.createdAt }
                         ReadingLibraryScreen(
                             decks = decks,
-                            articleMessages = articles,
+                            articleMessages = savedArticles,
                             onGenerate = { deck ->
                                 selectedArticleId = null
                                 readingStartedAt = System.currentTimeMillis()
@@ -721,7 +721,7 @@ fun VocabApp(
         }
 
         composable(Routes.GENERATED_READING) {
-            val article = selectedArticleId?.let { id -> assistantMessages.firstOrNull { it.id == id } }
+            val article = selectedArticleId?.let { id -> savedArticles.firstOrNull { it.id == id } }
                 ?: assistantMessages.lastOrNull {
                     it.role == "ASSISTANT" && it.kind == "ARTICLE" && it.createdAt >= readingStartedAt
                 }
@@ -910,8 +910,8 @@ fun VocabApp(
                 allCards = allCards,
                 decks = decks,
                 onGetDictionaryMatch = viewModel::getDictionaryMatch,
-                onFetchAiWordDetails = viewModel::fetchAiWordDetails,
-                onBatchFetchAiWordDetails = viewModel::fetchAiWordDetailsBatch,
+                onFetchAiWordDetails = viewModel::fetchAiCardDetails,
+                onBatchFetchAiWordDetails = viewModel::fetchAiCardDetailsBatch,
                 onAddFolder = viewModel::addFolder,
                 onSaveBatchCards = viewModel::saveBatchCards,
                 onBack = {

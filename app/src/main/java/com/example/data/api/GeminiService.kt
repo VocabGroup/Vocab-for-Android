@@ -186,17 +186,7 @@ object GeminiService {
         val enrichedByWord = data.toCandidates().associateBy { it.word.lowercase() }
         return candidates.map { candidate ->
             val enriched = enrichedByWord[candidate.word.trim().lowercase()] ?: return@map candidate
-            candidate.copy(
-                phonetic = candidate.phonetic.ifBlank { enriched.phonetic },
-                partOfSpeech = candidate.partOfSpeech.ifBlank { enriched.partOfSpeech },
-                definition = if (
-                    candidate.definition.isBlank() || candidate.definition.contains("待補充")
-                ) enriched.definition else candidate.definition,
-                exampleSentence = candidate.exampleSentence.ifBlank { enriched.exampleSentence },
-                exampleTranslation = candidate.exampleTranslation.ifBlank {
-                    enriched.exampleTranslation
-                }
-            )
+            mergeAiCompletion(candidate.copy(definition = candidate.definition.takeUnless { it.contains("待補充") }.orEmpty()), enriched)
         }
     }
 

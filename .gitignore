@@ -10,6 +10,7 @@ local.properties
 captures/
 
 # Node / web tooling
+# Private iOS/PWA development: do not include in public Android releases.
 /web/
 **/node_modules/
 web/.next/

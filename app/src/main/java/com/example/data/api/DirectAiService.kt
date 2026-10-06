@@ -270,17 +270,7 @@ object DirectAiService {
         }
         return candidates.map { original ->
             val item = enriched[original.word.trim().lowercase()] ?: return@map original
-            original.copy(
-                phonetic = original.phonetic.ifBlank { item.phonetic },
-                partOfSpeech = original.partOfSpeech.ifBlank { item.partOfSpeech },
-                definition = original.definition.takeUnless {
-                    it.isBlank() || it.contains("待補充")
-                } ?: item.definition,
-                exampleSentence = original.exampleSentence.ifBlank { item.exampleSentence },
-                exampleTranslation = original.exampleTranslation.ifBlank {
-                    item.exampleTranslation
-                }
-            )
+            mergeAiCompletion(original.copy(definition = original.definition.takeUnless { it.contains("待補充") }.orEmpty()), item)
         }
     }
 

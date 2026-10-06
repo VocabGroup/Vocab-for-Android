@@ -79,6 +79,7 @@ import com.example.ui.components.CalmEmptyState
 import com.example.ui.components.ImportDestinationSelector
 import com.example.ui.components.rememberResponsiveLayout
 import com.example.util.OcrWordParser
+import com.example.util.OcrCardCandidate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -114,8 +115,8 @@ fun AddEditCardScreen(
     allCards: List<Flashcard>,
     decks: List<Deck>,
     onGetDictionaryMatch: (String) -> DictionaryEntry?,
-    onFetchAiWordDetails: (suspend (String) -> DictionaryEntry?)? = null,
-    onBatchFetchAiWordDetails: (suspend (List<String>) -> Map<String, DictionaryEntry>)? = null,
+    onFetchAiWordDetails: (suspend (OcrCardCandidate) -> DictionaryEntry?)? = null,
+    onBatchFetchAiWordDetails: (suspend (List<OcrCardCandidate>) -> Map<Int, DictionaryEntry>)? = null,
     onAddFolder: (courseName: String, folderName: String, description: String, colorHex: String) -> Unit,
     onSaveBatchCards: suspend (cardsToSave: List<Flashcard>, cardsToDelete: List<Flashcard>) -> Result<List<Long>>,
     onBack: () -> Unit,
@@ -154,14 +155,20 @@ fun AddEditCardScreen(
     var isBatchAiLoading by remember { mutableStateOf(false) }
 
     fun applyAiToBlankFields(target: EditableCardState, entry: DictionaryEntry) {
+        if (!target.word.trim().equals(entry.word.trim(), ignoreCase = true)) return
         if (target.phonetic.isBlank()) target.phonetic = entry.phonetic
         if (target.partOfSpeech.isBlank()) target.partOfSpeech = entry.partOfSpeech
         if (target.definition.isBlank()) {
             target.definition = OcrWordParser.cleanDefinition(entry.definition)
         }
         if (target.exampleSentence.isBlank()) target.exampleSentence = entry.exampleSentence
-        if (target.exampleTranslation.isBlank()) target.exampleTranslation = entry.exampleTranslation
+        if (target.exampleTranslation.isBlank() && target.exampleSentence.trim() == entry.exampleSentence.trim()) target.exampleTranslation = entry.exampleTranslation
     }
+
+    fun aiCandidate(target: EditableCardState) = OcrCardCandidate(
+        word = target.word.trim(), phonetic = target.phonetic, partOfSpeech = target.partOfSpeech,
+        definition = target.definition, exampleSentence = target.exampleSentence, exampleTranslation = target.exampleTranslation
+    )
 
     fun needsAiCompletion(target: EditableCardState): Boolean =
         target.word.isNotBlank() && (
@@ -425,12 +432,12 @@ fun AddEditCardScreen(
                                 coroutineScope.launch {
                                     runCatching {
                                         onBatchFetchAiWordDetails?.invoke(
-                                            targets.map { it.word.trim() }
+                                            targets.map(::aiCandidate)
                                         ) ?: error("AI 一鍵補齊尚未設定")
                                     }.onSuccess { entries ->
                                         var completedCount = 0
-                                        targets.forEach { target ->
-                                            entries[target.word.trim().lowercase()]?.let { entry ->
+                                        targets.forEachIndexed { index, target ->
+                                            entries[index]?.let { entry ->
                                                 applyAiToBlankFields(target, entry)
                                                 completedCount++
                                             }
@@ -571,7 +578,7 @@ fun AddEditCardScreen(
                             cardState.isAiLoading = true
                             coroutineScope.launch {
                                 runCatching {
-                                    onFetchAiWordDetails?.invoke(cardState.word)
+                                    onFetchAiWordDetails?.invoke(aiCandidate(cardState))
                                 }.onSuccess { aiEntry ->
                                     if (aiEntry != null) {
                                         if (aiRequiresConfirmation && aiEntry.category == "AI 補充") {
