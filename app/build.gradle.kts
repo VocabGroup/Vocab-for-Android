@@ -25,12 +25,12 @@ android {
     applicationId = "com.aistudio.vocabpulse.srsapp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 30
-    versionName = "3.1.1"
+    versionCode = 31
+    versionName = "3.1.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "BACKEND_BASE_URL", "\"${backendBaseUrl.trimEnd('/')}\"")
-    buildConfigField("String", "GITHUB_REPOSITORY", "\"adam10000423-oss/Vocab\"")
+    buildConfigField("String", "GITHUB_REPOSITORY", "\"VocabGroup/Vocab-for-Android\"")
   }
 
   signingConfigs {
