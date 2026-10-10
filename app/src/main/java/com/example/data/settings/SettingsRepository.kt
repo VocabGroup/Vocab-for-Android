@@ -126,7 +126,7 @@ class SettingsRepository(private val context: Context) {
             ocrPreviewBeforeImport = value[Keys.ocrPreviewBeforeImport] ?: true,
             pdfPageLimit = (value[Keys.pdfPageLimit] ?: 20).coerceIn(1, 50),
             dictionarySource = value[Keys.dictionarySource]
-                ?.takeIf { it in setOf("AUTO", "GOOGLE", "CAMBRIDGE", "WIKTIONARY", "FREE") } ?: "AUTO",
+                ?.takeIf { it in setOf("AUTO", "ECDICT", "GOOGLE", "CAMBRIDGE", "WIKTIONARY", "FREE") } ?: "AUTO",
             autoSpeak = value[Keys.autoSpeak] ?: false,
             ttsContinueInBackground = value[Keys.ttsContinueInBackground] ?: false,
             ttsFloatingOverlay = value[Keys.ttsFloatingOverlay] ?: false,
@@ -277,7 +277,7 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDictionarySource(source: String) = context.settingsDataStore.edit {
         it[Keys.dictionarySource] = source.takeIf { value ->
-            value in setOf("AUTO", "GOOGLE", "CAMBRIDGE", "WIKTIONARY", "FREE")
+            value in setOf("AUTO", "ECDICT", "GOOGLE", "CAMBRIDGE", "WIKTIONARY", "FREE")
         } ?: "AUTO"
     }
 

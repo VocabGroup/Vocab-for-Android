@@ -682,11 +682,12 @@ fun SettingsScreen(
             if (settingsPage == "單字查詢") item {
                 SettingsSection("單字查詢") {
                     SettingDropdown(
-                        label = "線上字典來源",
+                        label = "字典來源",
                         value = settings.dictionarySource,
-                        options = listOf("AUTO", "GOOGLE", "CAMBRIDGE", "WIKTIONARY", "FREE"),
+                        options = listOf("AUTO", "ECDICT", "GOOGLE", "CAMBRIDGE", "WIKTIONARY", "FREE"),
                         optionText = {
                             when (it) {
+                                "ECDICT" -> "ECDICT 英漢字典（離線）"
                                 "GOOGLE" -> "Google 翻譯"
                                 "CAMBRIDGE" -> "劍橋英漢辭典"
                                 "WIKTIONARY" -> "維基詞典"
@@ -697,7 +698,7 @@ fun SettingsScreen(
                         onSelected = onDictionarySourceChange
                     )
                     Text(
-                        "自動模式遇到 429、逾時或查無結果時，會依序嘗試劍橋、維基詞典、Free Dictionary 與備用翻譯；中文查詢會優先翻成英文。網頁來源若改版，可能暫時無法解析。",
+                        "自動模式優先使用離線 ECDICT，查無結果才查詢線上來源。ECDICT 保留原始中文（部分為簡體），不提供例句；中文反查請用 Google。ECDICT：github.com/skywind3000/ECDICT（MIT）。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -264,6 +265,7 @@ private fun LocalDictionaryResult(card: Flashcard, onClick: () -> Unit) {
 
 @Composable
 private fun DictionaryResultCard(entry: DictionaryEntry, aiLoading: Boolean, onAiComplete: () -> Unit, onAdd: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()
@@ -278,6 +280,9 @@ private fun DictionaryResultCard(entry: DictionaryEntry, aiLoading: Boolean, onA
             if (entry.exampleSentence.isNotBlank()) Text(entry.exampleSentence)
             if (entry.exampleTranslation.isNotBlank()) Text(entry.exampleTranslation, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("資料來源：${entry.category}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (entry.category.startsWith("ECDICT")) {
+                TextButton(onClick = { uriHandler.openUri("https://github.com/skywind3000/ECDICT") }) { Text("查看 ECDICT 原始專案（MIT）") }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onAiComplete, enabled = !aiLoading, modifier = Modifier.weight(1f)) {
                     if (aiLoading) CircularProgressIndicator(modifier = Modifier.padding(4.dp)) else Icon(Icons.Default.AutoAwesome, null)

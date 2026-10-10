@@ -7,6 +7,7 @@ import com.example.data.AppDatabase
 import com.example.data.VocabularyRepository
 import com.example.data.dictionary.DictionaryEngine
 import com.example.data.dictionary.DictionaryEntry
+import com.example.data.dictionary.EcdictLookupService
 import com.example.data.dictionary.GoogleTranslateLookupService
 import com.example.data.dictionary.FreeDictionaryLookupService
 import com.example.data.dictionary.CambridgeDictionaryLookupService
@@ -1855,7 +1856,11 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
 
     suspend fun lookupDictionary(word: String): Result<DictionaryEntry> = runCatching {
         val chineseQuery = word.any { it.code in 0x3400..0x9FFF }
+        val offline = if (!chineseQuery && settings.value.dictionarySource == "AUTO")
+            runCatching { EcdictLookupService.lookup(getApplication(), word) }.getOrNull() else null
         when {
+            settings.value.dictionarySource == "ECDICT" -> EcdictLookupService.lookup(getApplication(), word)
+            offline != null -> offline
             chineseQuery && settings.value.dictionarySource == "GOOGLE" -> GoogleTranslateLookupService.lookup(word)
             chineseQuery -> runCatching { GoogleTranslateLookupService.lookup(word) }
                 .getOrElse { googleError ->
