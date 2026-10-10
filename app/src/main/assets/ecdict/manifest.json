@@ -3,7 +3,14 @@
   "revision": "bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b",
   "csvSha256": "1a6947e04785db63613a92e14903cdae7954f7e84860b10e68e5c7cbb3f9c3cf",
   "entries": 761816,
+  "dataVersion": "zh-TW-v1",
   "license": "MIT",
-  "translation": "upstream Chinese (mostly simplified)",
+  "translation": "zh-TW",
+  "conversion": {
+    "tool": "OpenCC",
+    "version": "1.4.2",
+    "config": "s2twp",
+    "source": "https://github.com/BYVoid/OpenCC"
+  },
   "format": "FNV-1a low byte; [word, phonetic, pos, definition]; English exact match"
 }

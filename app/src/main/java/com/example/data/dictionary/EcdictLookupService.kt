@@ -28,6 +28,6 @@ object EcdictLookupService {
         val row = data.optJSONArray(key) ?: error("ECDICT 查無此單字；可改用其他來源")
         val phonetic = row.getString(1)
         DictionaryEntry(row.getString(0), if (phonetic.isBlank()) "" else "/$phonetic/",
-            row.getString(2), row.getString(3), "", "", "ECDICT 英漢字典（原始中文釋義）")
+            row.getString(2), row.getString(3), "", "", "ECDICT 英漢字典（繁體中文）")
     }
 }

@@ -1,0 +1,1 @@
+ECDICT definitions modified for Vocab: converted to Traditional Chinese (Taiwan) using OpenCC 1.4.2, s2twp. ECDICT: MIT, https://github.com/skywind3000/ECDICT. OpenCC: Apache-2.0, https://github.com/BYVoid/OpenCC. English words/phonetics retained; no examples generated.

@@ -698,7 +698,7 @@ fun SettingsScreen(
                         onSelected = onDictionarySourceChange
                     )
                     Text(
-                        "自動模式優先使用離線 ECDICT，查無結果才查詢線上來源。ECDICT 保留原始中文（部分為簡體），不提供例句；中文反查請用 Google。ECDICT：github.com/skywind3000/ECDICT（MIT）。",
+                        "自動模式優先使用離線 ECDICT，查無結果才查詢線上來源。ECDICT 中文釋義已轉為台灣繁體，不提供例句；中文反查請用 Google。ECDICT：github.com/skywind3000/ECDICT（MIT）。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
