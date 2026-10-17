@@ -128,6 +128,8 @@ fun VocabApp(
     val assistantConversations by viewModel.assistantConversations.collectAsStateWithLifecycle()
     val assistantMessages by viewModel.assistantMessages.collectAsStateWithLifecycle()
     val savedArticles by viewModel.savedArticles.collectAsStateWithLifecycle()
+    val folderShareUndoIds by viewModel.folderShareUndoIds.collectAsStateWithLifecycle()
+    val scanImportUndoIds by viewModel.scanImportUndoIds.collectAsStateWithLifecycle()
     val assistantCurrentConversationId by viewModel.assistantCurrentConversationId.collectAsStateWithLifecycle()
     val assistantBusy by viewModel.assistantBusy.collectAsStateWithLifecycle()
     val assistantStatus by viewModel.assistantStatus.collectAsStateWithLifecycle()
@@ -413,6 +415,11 @@ fun VocabApp(
                         allCards = allCards,
                         onAddFolder = viewModel::addFolder,
                         onUpdateFolder = viewModel::updateDeck,
+                        onImportShare = viewModel::importSharedFolders,
+                        onUndoShare = viewModel::undoSharedFolders,
+                        shareUndoIds = folderShareUndoIds,
+                        scanUndoCount = scanImportUndoIds.size,
+                        onUndoScan = viewModel::undoLastScanImport,
                         onDeleteFolder = viewModel::deleteDeck,
                         onMoveFolder = viewModel::moveDeck,
                         onMoveFolderGlobally = viewModel::moveDeckGlobally,
@@ -976,13 +983,14 @@ fun VocabApp(
             PhotoOcrScreen(
                 decks = decks,
                 candidates = ocrCandidates,
+                existingCards = allCards,
+                onImportToNewFolder = { candidates, deckId,done -> viewModel.importOcrToNewFolder(candidates,deckId){success->done(success);if(success)navController.popBackStack()} },
                 initialDeckId = selectedDeckId,
                 aiAvailable = settings.aiEnabled &&
                     settings.usePersonalAiApi &&
                     apiKeyConfigured,
-                onImportCandidates = { candidates, deckId ->
-                    viewModel.importOcrCandidates(candidates, deckId)
-                    navController.popBackStack()
+                onImportCandidates = { candidates, deckId,done ->
+                    viewModel.importOcrCandidates(candidates, deckId){success->done(success);if(success)navController.popBackStack()}
                 },
                 onBack = { navController.popBackStack() },
                 pdfPageLimit = settings.pdfPageLimit

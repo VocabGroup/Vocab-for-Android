@@ -62,6 +62,17 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import coil.compose.AsyncImage
+import com.example.util.ScanInstructions
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -96,8 +107,10 @@ fun PhotoOcrScreen(
     decks: List<Deck>,
     candidates: List<OcrCardCandidate>,
     initialDeckId: Long? = null,
-    onImportCandidates: (List<OcrCardCandidate>, Long) -> Unit,
+    onImportCandidates: (List<OcrCardCandidate>, Long,(Boolean)->Unit) -> Unit,
     onBack: () -> Unit,
+    existingCards:List<com.example.data.entity.Flashcard> = emptyList(),
+    onImportToNewFolder: (List<OcrCardCandidate>,Long,(Boolean)->Unit)->Unit = {_,_,done->done(false)},
     aiAvailable: Boolean = false,
     pdfPageLimit: Int = 20,
     modifier: Modifier = Modifier
@@ -115,6 +128,20 @@ fun PhotoOcrScreen(
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var isAiEnriching by remember { mutableStateOf(false) }
     var recognitionProgress by remember { mutableStateOf("") }
+    var scanMode by remember { mutableStateOf("主單字／標題") }
+    var customScan by remember { mutableStateOf("") }
+    val pendingImages=remember{mutableStateListOf<Uri>()}
+    val completedImages=remember{mutableStateListOf<Uri>()}
+    val imageErrors=remember{androidx.compose.runtime.mutableStateMapOf<Uri,String>()}
+    var imageJob by remember{mutableStateOf<Job?>(null)}
+    var confirmLeave by remember{mutableStateOf(false)}
+    var importNewFolder by remember{mutableStateOf(false)}
+    var importing by remember{mutableStateOf(false)}
+    var editingCandidate by remember{mutableStateOf<Int?>(null)}
+    var editWord by remember{mutableStateOf("")}
+    var editDefinition by remember{mutableStateOf("")}
+    DisposableEffect(Unit){onDispose{imageJob?.cancel()}}
+    BackHandler(enabled=isOcrScanning){confirmLeave=true}
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -155,51 +182,27 @@ fun PhotoOcrScreen(
     }
 
     val processImageUris: (List<Uri>, String) -> Unit = processImages@ { uris, source ->
-        if (!aiAvailable) {
-            coroutineScope.launch {
-                snackbarHostState.showSnackbar("請先在設定中啟用個人 AI API 並選擇支援圖片的模型")
-            }
-            return@processImages
-        }
-        val selectedUris = uris.take(pdfPageLimit.coerceIn(1, 50))
-        if (selectedUris.isEmpty()) return@processImages
-
-        isOcrScanning = true
-        recognitionProgress = "正在辨識 0 / ${selectedUris.size} 張"
-        coroutineScope.launch {
-            runCatching {
-                buildList {
-                    selectedUris.chunked(4).forEachIndexed { chunkIndex, uriChunk ->
-                        val payloads = uriChunk.map { uri ->
-                            AiImagePreprocessor.prepare(context, uri)
-                        }
-                        addAll(GeminiService.analyzeImages(payloads))
-                        val completed = minOf(selectedUris.size, (chunkIndex + 1) * 4)
-                        recognitionProgress = "正在辨識 $completed / ${selectedUris.size} 張"
-                    }
+        if (!aiAvailable) {coroutineScope.launch {snackbarHostState.showSnackbar("請先啟用個人 AI API 並選擇支援圖片的模型")};return@processImages}
+        val selectedUris=uris.distinct().filter{it !in completedImages}
+        if(selectedUris.isEmpty()||isOcrScanning)return@processImages
+        isOcrScanning=true
+        imageJob=coroutineScope.launch {
+            try {
+                selectedUris.forEachIndexed{index,uri->
+                    recognitionProgress="準備／傳送／AI 辨識 第 ${index+1}/${selectedUris.size} 張"
+                    try{
+                        val payload=AiImagePreprocessor.prepare(context,uri)
+                        val parsed=GeminiService.analyzeImages(listOf(payload),ScanInstructions.build(scanMode,customScan))
+                        parsed.forEach{candidate->if(localCandidates.none{it.word.trim().equals(candidate.word.trim(),true)})localCandidates.add(candidate)}
+                        completedImages.add(uri);imageErrors.remove(uri)
+                    }catch(error:Exception){if(error is CancellationException)throw error;imageErrors[uri]=error.localizedMessage?:"辨識失敗"}
                 }
-                    .distinctBy { it.word.trim().lowercase() }
-            }.onSuccess { parsed ->
-                isOcrScanning = false
-                recognitionProgress = ""
-                localCandidates.clear()
-                localCandidates.addAll(parsed)
-                snackbarHostState.showSnackbar(
-                    if (parsed.isEmpty()) {
-                        "${source}完成，但 AI 沒有找到可匯入的英文單字"
-                    } else {
-                        "${source}完成，AI 找到 ${parsed.size} 張單字卡"
-                    }
-                )
-            }.onFailure { error ->
-                isOcrScanning = false
-                recognitionProgress = ""
-                snackbarHostState.showSnackbar(
-                    "${source}失敗：${error.localizedMessage ?: "多模態 AI 無法讀取圖片"}"
-                )
-            }
+                snackbarHostState.showSnackbar("$source：已完成 ${completedImages.size} 張，成功結果保留；失敗可單獨重試")
+            }finally{isOcrScanning=false;recognitionProgress="";imageJob=null}
         }
     }
+    fun enqueueImages(uris:List<Uri>){if(pendingImages.size+uris.size>30){coroutineScope.launch{snackbarHostState.showSnackbar("單次最多 30 張，請分批匯入")};return};uris.forEach{if(it !in pendingImages)pendingImages.add(it)}}
+
 
     val documentScannerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -213,7 +216,7 @@ fun PhotoOcrScreen(
                 emptyList()
             }
             if (pageUris.isNotEmpty()) {
-                processImageUris(pageUris, "文件掃描")
+                enqueueImages(pageUris)
             } else {
                 coroutineScope.launch {
                     snackbarHostState.showSnackbar("文件掃描沒有回傳可傳送給 AI 的頁面圖片")
@@ -246,7 +249,7 @@ fun PhotoOcrScreen(
         val capturedUri = pendingCameraUri
         pendingCameraUri = null
         if (saved && capturedUri != null) {
-            processImageUris(listOf(capturedUri), "拍照辨識")
+            enqueueImages(listOf(capturedUri))
         } else {
             coroutineScope.launch {
                 snackbarHostState.showSnackbar("已取消拍照")
@@ -256,9 +259,9 @@ fun PhotoOcrScreen(
 
     // Photo Picker Launcher
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { processImageUris(listOf(it), "相片辨識") }
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        enqueueImages(uris)
     }
     val docPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -270,7 +273,7 @@ fun PhotoOcrScreen(
                 listOf(".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif")
                     .any(uriText::endsWith)
             if (isImage) {
-                processImageUris(listOf(it), "圖片辨識")
+                enqueueImages(listOf(it))
             } else {
                 processScannedUri(it, "檔案分析")
             }
@@ -304,18 +307,23 @@ fun PhotoOcrScreen(
             isAiEnriching = false
         }
     }
+    editingCandidate?.let{index->androidx.compose.material3.AlertDialog(onDismissRequest={editingCandidate=null},title={Text("編輯辨識內容")},text={Column{OutlinedTextField(value=editWord,onValueChange={editWord=it},label={Text("單字")});OutlinedTextField(value=editDefinition,onValueChange={editDefinition=it},label={Text("解釋")})}},confirmButton={TextButton(enabled=editWord.isNotBlank(),onClick={if(index in localCandidates.indices)localCandidates[index]=localCandidates[index].copy(word=editWord.trim(),definition=editDefinition.trim());editingCandidate=null}){Text("儲存")}},dismissButton={TextButton(onClick={editingCandidate=null}){Text("取消")}})}
     fun importCandidates() {
         val deckId = selectedDeckId ?: return
-        onImportCandidates(localCandidates.filter { it.isSelected }, deckId)
+        if(importing)return;importing=true
+        val done:(Boolean)->Unit={success->importing=false;if(!success)coroutineScope.launch{snackbarHostState.showSnackbar("匯入未完成，辨識結果保留，請檢查儲存空間後重試")}}
+        if(importNewFolder)onImportToNewFolder(localCandidates.filter{it.isSelected},deckId,done)
+        else onImportCandidates(localCandidates.filter { it.isSelected }, deckId,done)
     }
 
+    if(confirmLeave){androidx.compose.material3.AlertDialog(onDismissRequest={confirmLeave=false},title={Text("作業仍在進行")},text={Text("離開會取消尚未完成的圖片辨識，確定離開嗎？")},confirmButton={TextButton(onClick={imageJob?.cancel();confirmLeave=false;onBack()}){Text("取消作業並離開")}},dismissButton={TextButton(onClick={confirmLeave=false}){Text("繼續等待")}})}
     Scaffold(
         topBar = {
             TopAppBar(
                 expandedHeight = 48.dp,
                 title = { Text("掃描匯入", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {if(isOcrScanning||isAiEnriching)confirmLeave=true else onBack()}) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
@@ -335,7 +343,7 @@ fun PhotoOcrScreen(
                     ) {
                         OutlinedButton(
                             onClick = ::enrichCandidates,
-                            enabled = aiAvailable && !isAiEnriching,
+                            enabled = aiAvailable && !isAiEnriching && !isOcrScanning && !importing,
                             modifier = Modifier.weight(1f).testTag("ai_batch_enrich_button")
                         ) {
                             if (isAiEnriching) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -343,7 +351,7 @@ fun PhotoOcrScreen(
                         }
                         Button(
                             onClick = ::importCandidates,
-                            enabled = selectedDeckId != null && localCandidates.any { it.isSelected },
+                            enabled = selectedDeckId != null && localCandidates.any { it.isSelected } && !isOcrScanning && !isAiEnriching && !importing,
                             modifier = Modifier.weight(1f).testTag("batch_import_button")
                         ) { Icon(Icons.Default.Check, null); Text("確認匯入") }
                     }
@@ -396,6 +404,21 @@ fun PhotoOcrScreen(
                 }
             }
 
+            Column(Modifier.heightIn(max=240.dp).verticalScroll(rememberScrollState())){
+            Row(horizontalArrangement=Arrangement.spacedBy(4.dp)){listOf("主單字／標題","全部明列詞條","自訂範圍").forEach{mode->TextButton(enabled=!isOcrScanning,onClick={scanMode=mode}){Text((if(scanMode==mode)"✓ " else "")+mode)}}}
+            if(scanMode=="自訂範圍")OutlinedTextField(value=customScan,onValueChange={customScan=it},label={Text("例如：只辨識左欄畫線的主單字")},modifier=Modifier.fillMaxWidth())
+            if(pendingImages.isNotEmpty()){
+                LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.fillMaxWidth()){
+                    itemsIndexed(pendingImages){index,uri->Column(Modifier.width(112.dp)){
+                        AsyncImage(model=uri,contentDescription="第 ${index+1} 張圖片",modifier=Modifier.size(90.dp))
+                        Text(if(uri in completedImages)"完成" else imageErrors[uri]?:"等待",maxLines=2,style=MaterialTheme.typography.labelSmall)
+                        Row{TextButton(enabled=!isOcrScanning&&index>0,onClick={val previous=pendingImages[index-1];pendingImages[index-1]=uri;pendingImages[index]=previous}){Text("↑")};TextButton(enabled=!isOcrScanning,onClick={pendingImages.remove(uri);imageErrors.remove(uri)}){Text("移除")}}
+                    }}
+                }
+                if(isOcrScanning)TextButton(onClick={imageJob?.cancel()}){Text("停止（保留成功結果）")}
+                else Button(enabled=pendingImages.any{it !in completedImages}&&(scanMode!="自訂範圍"||customScan.isNotBlank()),onClick={processImageUris(pendingImages.toList(),"圖片辨識")}){Text("開始／重試未完成圖片")}
+            }
+            }
             val sourceButtonsEnabled = !isOcrScanning && !isScannerLaunching
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -520,6 +543,7 @@ fun PhotoOcrScreen(
             }
 
             // Extracted Candidates Table List
+            if(localCandidates.isNotEmpty())Row{Checkbox(checked=importNewFolder,onCheckedChange={importNewFolder=it});Text("重複單字另建資料夾（預設略過已有單字）",style=MaterialTheme.typography.bodySmall)}
             if (localCandidates.isNotEmpty()) {
                 Text(
                     text = "找到 ${localCandidates.size} 張",
@@ -552,6 +576,8 @@ fun PhotoOcrScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f)) {
+                                    if(existingCards.any{it.deckId==selectedDeckId&&it.normalizedWord==candidate.word.trim().lowercase()})Text("目標資料夾已有此單字",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.labelSmall)
+                                    TextButton(onClick={editingCandidate=index;editWord=candidate.word;editDefinition=candidate.definition}){Text("編輯辨識內容")}
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = candidate.word,

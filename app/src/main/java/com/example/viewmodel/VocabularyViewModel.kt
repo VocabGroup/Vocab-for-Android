@@ -261,6 +261,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
     val assistantSelectedDeckIds: StateFlow<Set<Long>> = _assistantSelectedDeckIds.asStateFlow()
     private var assistantContextDeckId: Long? = null
     private var assistantRequestJob: Job? = null
+    private var assistantRequestGeneration=0L
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .onEach {
@@ -2081,13 +2082,19 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun importOcrCandidates(candidates: List<OcrCardCandidate>, targetDeckId: Long) {
+    fun importOcrToNewFolder(candidates:List<OcrCardCandidate>,sourceId:Long,onComplete:(Boolean)->Unit={}){
+        val source=allDecks.value.firstOrNull{it.id==sourceId}?:return
+        val cards=candidates.filter{it.isSelected&&it.word.isNotBlank()}.map{Flashcard(deckId=0,word=it.word,definition=it.definition.ifBlank{"待補齊"},phonetic=it.phonetic,partOfSpeech=it.partOfSpeech,exampleSentence=it.exampleSentence,exampleTranslation=it.exampleTranslation)}
+        viewModelScope.launch{importSharedFolders(listOf(com.example.data.importer.SharedFolder(source.name+"（辨識匯入）",source.category,source.description,source.colorHex,cards)),source.category,false).onSuccess{_dataMessage.value="已匯入新資料夾，精熟度已重設；可在資料夾頁撤回";onComplete(true)}.onFailure{_dataMessage.value="匯入失敗：${it.localizedMessage}";onComplete(false)}}
+    }
+    fun importOcrCandidates(candidates: List<OcrCardCandidate>, targetDeckId: Long,onComplete:(Boolean)->Unit={}) {
         val selectedCandidates = candidates
             .filter { it.isSelected && it.word.isNotBlank() }
             .distinctBy { it.word.trim().lowercase() }
-        if (selectedCandidates.isEmpty()) return
+        if (selectedCandidates.isEmpty()) {onComplete(false);return}
 
         viewModelScope.launch {
+            runCatching {
             // Only exact dictionary data is applied automatically. AI changes are
             // made in the preview screen before the user confirms the import.
             val baseEnriched = OcrWordParser.enrichCandidatesWithDictionary(selectedCandidates)
@@ -2120,15 +2127,18 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                     sortOrder = bottomSortOrder - index
                 )
             }
-            val insertedCount = repository.insertCardsDeduplicating(cards)
+            val insertedIds=db.withTransaction{val known=db.flashcardDao().getCardsByDeckOnce(targetDeckId).mapTo(hashSetOf()){it.normalizedWord};cards.filter{known.add(it.normalizedWord)}.map{db.flashcardDao().insertCard(it)}}
+            _scanImportUndoIds.value=insertedIds
+            val insertedCount = insertedIds.size
             val duplicateCount = cards.size - insertedCount
             _ocrCandidates.value = emptyList()
             _importUiState.value = ImportUiState.Success(insertedCount)
             _dataMessage.value = if (duplicateCount > 0) {
-                "已依畫面順序匯入 $insertedCount 張，略過或更新 $duplicateCount 張重複單字"
+                "已依畫面順序匯入 $insertedCount 張，略過 $duplicateCount 張重複單字"
             } else {
                 "已依畫面順序匯入 $insertedCount 張單字卡"
             }
+            }.onSuccess{onComplete(true)}.onFailure{_ocrCandidates.value=selectedCandidates;_dataMessage.value="匯入失敗：${it.localizedMessage}，辨識結果保留";onComplete(false)}
         }
     }
 
@@ -2275,6 +2285,43 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         if (target.parentFile == attachmentDirectory) target.delete()
     }
 
+    private var sharedImportIds:List<Long> = emptyList()
+    private var sharedImportCardIds:Set<Long> = emptySet()
+    private val _folderShareUndoIds=MutableStateFlow<List<Long>>(emptyList())
+    val folderShareUndoIds:StateFlow<List<Long>> = _folderShareUndoIds.asStateFlow()
+    private val _scanImportUndoIds=MutableStateFlow<List<Long>>(emptyList())
+    val scanImportUndoIds:StateFlow<List<Long>> = _scanImportUndoIds.asStateFlow()
+    fun undoLastScanImport(){val ids=_scanImportUndoIds.value;if(ids.isEmpty())return;viewModelScope.launch{runCatching{db.withTransaction{ids.forEach{id->db.flashcardDao().getCardById(id)?.let{db.flashcardDao().deleteCard(it)}}}}.onSuccess{_scanImportUndoIds.value=emptyList();_dataMessage.value="已撤回上次單字匯入，原有字卡保留"}.onFailure{_dataMessage.value="撤回失敗：${it.localizedMessage}"}}}
+    suspend fun importSharedFolders(folders:List<com.example.data.importer.SharedFolder>,course:String,skipDuplicates:Boolean):Result<List<Long>> = runCatching {
+        require(folders.isNotEmpty()) { "請選擇資料夾" }
+        val createdCardIds=mutableSetOf<Long>()
+        withContext(Dispatchers.IO){db.withTransaction {
+            val existing=db.deckDao().getAllDecksOnce().toMutableList()
+            val known=db.flashcardDao().getAllCards().first().mapTo(hashSetOf()){it.normalizedWord}
+            val ids=mutableListOf<Long>()
+            folders.forEach{source->
+                val category=course.trim().ifBlank{source.course};var name=source.name;var suffix=1
+                while(existing.any{it.category==category&&it.name==name}){name="${source.name}（匯入${if(suffix==1)"" else suffix}）";suffix++}
+                val now=System.currentTimeMillis();val deck=Deck(name=name,category=category,description=source.description,colorHex=source.color,sortOrder=(existing.maxOfOrNull{it.sortOrder}?:now)+1)
+                val id=db.deckDao().insertDeck(deck);existing.add(deck.copy(id=id));ids.add(id)
+                val seen=hashSetOf<String>();val safe=source.cards.filter{seen.add(it.normalizedWord)&&(!skipDuplicates||it.normalizedWord !in known)}
+                safe.forEachIndexed{index,card->createdCardIds.add(db.flashcardDao().insertCard(card.copy(id=0,deckId=id,isMastered=false,isFavorite=false,isSuspended=false,mistakeCount=0,intervalDays=0,easeFactor=2.5f,repetitionCount=0,nextReviewTimestamp=now,lastReviewedTimestamp=null,createdAt=now,sortOrder=now+safe.size-index)))}
+                known.addAll(safe.map{it.normalizedWord})
+            };ids
+        }}.also{sharedImportIds=it;sharedImportCardIds=createdCardIds;_folderShareUndoIds.value=it}
+    }
+    suspend fun undoSharedFolders(ids:List<Long>):Result<Unit> = runCatching {
+        require(ids.isNotEmpty()&&ids.toSet()==sharedImportIds.toSet()){ "找不到可撤回的匯入批次" }
+        withContext(Dispatchers.IO){db.withTransaction{
+            require(ids.all{id->db.flashcardDao().getCardsByDeckOnce(id).all{it.id in sharedImportCardIds}}){"資料夾已加入其他字卡，請先移出它們再撤回，避免刪除原有資料"}
+            sharedImportCardIds.forEach{id->db.flashcardDao().getCardById(id)?.let{db.flashcardDao().deleteCard(it)}}
+            ids.forEach{id->db.deckDao().getDeckById(id)?.let{db.deckDao().deleteDeck(it)}}
+        }}
+        sharedImportIds=emptyList()
+        sharedImportCardIds=emptySet()
+        _folderShareUndoIds.value=emptyList()
+    }
+
     fun sendAssistantMessage(text: String, attachments: List<Uri> = emptyList()) {
         val safeAttachments = attachments.distinct().take(5)
         val attachmentLabels = safeAttachments.mapIndexed { index, uri ->
@@ -2294,6 +2341,9 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         updateAssistantConversationTitle(conversationId, request)
 
         val targetDeck = resolveAssistantDeck(request)
+        if(safeAttachments.isEmpty() && (Regex("(?:寫|生成|建立|產生|撰寫).*(?:文章|故事|閱讀)|(?:文章|故事).*(?:生成|撰寫)").containsMatchIn(request)||request.contains("繼續補齊文章"))){
+            generateFullFolderArticle(request,targetDeck,request.contains("繼續補齊文章"));return
+        }
         val asksForSort = request.contains("排序") || request.contains("排列")
         val mentionsAlphabet = request.contains("字母") ||
             request.contains("A-Z", ignoreCase = true) || request.contains("英文順序")
@@ -2313,6 +2363,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
+        val requestGeneration=++assistantRequestGeneration
         assistantRequestJob = viewModelScope.launch {
             _assistantBusy.value = true
             _assistantSendOutcome.value = null
@@ -2410,9 +2461,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                     )
                 }
             }
-            _assistantStatus.value = null
-            _assistantBusy.value = false
-            assistantRequestJob = null
+            if(requestGeneration==assistantRequestGeneration){_assistantStatus.value=null;_assistantBusy.value=false;assistantRequestJob=null}
         }
     }
 
@@ -2452,6 +2501,41 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    private fun generateFullFolderArticle(request:String,deck:Deck?,resume:Boolean){
+        val saved=if(resume)assistantAllMessages.lastOrNull{it.kind=="ARTICLE"&&it.conversationId==_assistantCurrentConversationId.value} else null
+        val savedPayload=saved?.let{runCatching{JSONObject(it.payload)}.getOrNull()}
+        val words=if(savedPayload?.has("targetWords")==true){val array=savedPayload.getJSONArray("targetWords");(0 until array.length()).map{array.getString(it)}} else allCards.value.filter{if(deck!=null)it.deckId==deck.id else it.deckId in _assistantSelectedDeckIds.value}.map{it.word}.distinctBy{it.lowercase()}
+        if(words.isEmpty()){appendAssistantMessage("ASSISTANT","所選資料夾沒有單字，請先選擇資料夾。");return}
+        val id=saved?.id?:appendAssistantMessage("ASSISTANT","正在規劃包含全部 ${words.size} 個單字的文章…",kind="ARTICLE")
+        var article=if(resume)savedPayload?.optString("article").orEmpty() else ""
+        var translation=if(resume)savedPayload?.optString("articleTranslation").orEmpty() else ""
+        fun save(){
+            val missing=com.example.util.ArticleCoverage.missing(article,words)
+            val payload=JSONObject().put("type","ARTICLE").put("article",article).put("articleTranslation",translation).put("targetWords",JSONArray(words)).put("targetCardIds",JSONArray(allCards.value.filter{it.word in words && (if(deck!=null)it.deckId==deck.id else it.deckId in _assistantSelectedDeckIds.value)}.map{it.id})).put("missingWords",JSONArray(missing)).put("coverage","${words.size-missing.size}/${words.size}").put("complete",missing.isEmpty())
+            val index=assistantAllMessages.indexOfFirst{it.id==id};if(index>=0){assistantAllMessages[index]=assistantAllMessages[index].copy(content="${if(missing.isEmpty())"文章已完成" else "文章草稿／尚未完成"} · 涵蓋 ${words.size-missing.size}/${words.size} 字\n\n$article${if(missing.isNotEmpty())"\n\n尚缺：${missing.joinToString()}\n可在聊天室輸入「繼續補齊文章」。" else ""}",payload=payload.toString());refreshAssistantMessages();persistAssistantState()}
+        }
+        val requestGeneration=++assistantRequestGeneration
+        assistantRequestJob=viewModelScope.launch{
+            _assistantBusy.value=true
+            try{
+                check(settings.value.aiEnabled&&settings.value.usePersonalAiApi){"請先啟用個人 AI API"}
+                save()
+                com.example.util.ArticleCoverage.missing(article,words).chunked(35).forEach{batch->
+                    for(attempt in 0..2){
+                        val missing=com.example.util.ArticleCoverage.missing(article,batch);if(missing.isEmpty())break
+                        _assistantStatus.value="文章涵蓋 ${words.size-com.example.util.ArticleCoverage.missing(article,words).size}/${words.size} 字；正在撰寫下一章…"
+                        val result=GeminiService.runAssistant("""請接續同一篇自然英文故事的一個章節，在英文正文使用目標清單每個完整單字／片語，允許合理詞形變化。不可只列單字，也不可省略。只輸出 JSON：{"article":"英文正文","articleTranslation":"繁體中文翻譯"}。使用者要求：$request。目標單字：${JSONArray(missing)}。前文最後一段：${article.takeLast(2500)}""")
+                        val chapter=result.optString("article").trim();check(chapter.isNotBlank()){"AI 未回傳有效文章，已完成內容保留"}
+                        article+=(if(article.isBlank())"" else "\n\n")+chapter
+                        translation+=(if(translation.isBlank())"" else "\n\n")+result.optString("articleTranslation")
+                        save()
+                    }
+                }
+            }catch(error:Exception){save();if(error !is CancellationException)appendAssistantMessage("ASSISTANT","文章尚未完成：${error.localizedMessage}。草稿已保留，可輸入「繼續補齊文章」。")}
+            finally{if(requestGeneration==assistantRequestGeneration){_assistantBusy.value=false;_assistantStatus.value=null;assistantRequestJob=null}}
+        }
+    }
+
     private fun updateAssistantMessageAttachments(messageId: String, uris: List<String>) {
         val index = assistantAllMessages.indexOfFirst { it.id == messageId }
         if (index < 0) return
@@ -2461,6 +2545,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun stopAssistantRequest() {
+        assistantRequestGeneration++
         assistantRequestJob?.cancel()
         assistantRequestJob = null
         _assistantStatus.value = null

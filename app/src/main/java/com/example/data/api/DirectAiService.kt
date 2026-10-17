@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -27,7 +28,8 @@ object DirectAiService {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
+        .callTimeout(120, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(false)
         .build()
 
     data class AiUsageSnapshot(
@@ -36,6 +38,7 @@ object DirectAiService {
     )
 
     class AiQuotaException(message: String) : IllegalStateException(message)
+    class AiHttpException(val code:Int,message:String):IllegalStateException(message)
 
     private val _usage = MutableStateFlow<Map<AiProvider, AiUsageSnapshot>>(emptyMap())
     val usage: StateFlow<Map<AiProvider, AiUsageSnapshot>> = _usage.asStateFlow()
@@ -194,7 +197,8 @@ object DirectAiService {
     suspend fun analyzeImages(
         config: PersonalAiConfig,
         images: List<ImagePayload>,
-        customInstructions: String = AiPromptDefaults.IMAGE_VOCABULARY_EXTRACTION
+        customInstructions: String = AiPromptDefaults.IMAGE_VOCABULARY_EXTRACTION,
+        scopeInstructions:String=com.example.util.ScanInstructions.build()
     ): List<OcrCardCandidate> {
         val accepted = images
             .take(10)
@@ -208,6 +212,7 @@ object DirectAiService {
         val prompt = """
             ${customInstructions.trim().take(4_000)}
 
+            本次範圍指令優先：$scopeInstructions
             依照圖片提供的原始順序輸出 cards。若圖片沒有可辨識的英文單字，回傳 {"cards":[]}。
         """.trimIndent()
         val root = generateJson(config, prompt, accepted) as? JSONObject
@@ -399,7 +404,7 @@ object DirectAiService {
             parseJsonPayload(response)
         }
 
-    private fun gemini(
+    private suspend fun gemini(
         config: PersonalAiConfig,
         prompt: String,
         images: List<ImagePayload>
@@ -430,7 +435,8 @@ object DirectAiService {
                     .put("maxOutputTokens", 4096)
             )
         val request = Request.Builder()
-            .url("https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}")
+            .url("https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent")
+            .header("x-goog-api-key",config.apiKey)
             .post(jsonBody(body))
             .build()
         val root = JSONObject(execute(request, config.provider))
@@ -438,7 +444,7 @@ object DirectAiService {
             .getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
     }
 
-    private fun openAi(
+    private suspend fun openAi(
         config: PersonalAiConfig,
         prompt: String,
         images: List<ImagePayload>
@@ -476,7 +482,7 @@ object DirectAiService {
         error("OpenAI 未回傳文字")
     }
 
-    private fun anthropic(
+    private suspend fun anthropic(
         config: PersonalAiConfig,
         prompt: String,
         images: List<ImagePayload>
@@ -512,7 +518,7 @@ object DirectAiService {
             .getJSONObject(0).getString("text")
     }
 
-    private fun openRouter(
+    private suspend fun openRouter(
         config: PersonalAiConfig,
         prompt: String,
         images: List<ImagePayload>
@@ -543,10 +549,21 @@ object DirectAiService {
             .getJSONObject("message").getString("content")
     }
 
-    private fun execute(
+    private suspend fun execute(
         request: Request,
         provider: AiProvider
-    ): String = client.newCall(request).execute().use { response ->
+    ): String = suspendCancellableCoroutine { continuation ->
+        val call=client.newCall(request)
+        continuation.invokeOnCancellation{call.cancel()}
+        call.enqueue(object:okhttp3.Callback{
+            override fun onFailure(call:okhttp3.Call,error:java.io.IOException){if(continuation.isActive)continuation.resumeWith(Result.failure(error))}
+            override fun onResponse(call:okhttp3.Call,response:okhttp3.Response){
+                val result=runCatching{response.use{parseResponse(it,provider)}}
+                if(continuation.isActive)continuation.resumeWith(result)
+            }
+        })
+    }
+    private fun parseResponse(response:okhttp3.Response,provider:AiProvider):String {
         val body = response.body?.string().orEmpty()
         if (!response.isSuccessful) {
             val detail = runCatching {
@@ -564,13 +581,13 @@ object DirectAiService {
                 )
                 throw AiQuotaException(message)
             }
-            error(message)
+            throw AiHttpException(response.code,message)
         }
         updateRateLimitUsage(provider, response.headers)
         if (body.isBlank()) {
             error("AI API 回傳空白內容，請確認所選模型可用並且帳戶仍有額度")
         }
-        body
+        return body
     }
 
     private fun updateRateLimitUsage(provider: AiProvider, headers: okhttp3.Headers) {

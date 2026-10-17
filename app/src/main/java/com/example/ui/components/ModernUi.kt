@@ -168,6 +168,7 @@ fun ModernCollectionRow(
     onQuiz: () -> Unit,
     onEdit: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
     dragModifier: Modifier? = null,
     primaryActionModifier: Modifier = Modifier,
     modifier: Modifier = Modifier
@@ -199,6 +200,7 @@ fun ModernCollectionRow(
                     DropdownMenuItem(text = { Text("測驗") }, enabled = count > 0, onClick = { menu = false; onQuiz() })
                     onEdit?.let { action -> DropdownMenuItem(text = { Text("編輯") }, onClick = { menu = false; action() }) }
                     onDelete?.let { action -> DropdownMenuItem(text = { Text("刪除", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; action() }) }
+                    onShare?.let { action -> DropdownMenuItem(text={Text("分享資料夾")},onClick={menu=false;action()}) }
                 }
             }
         }

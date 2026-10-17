@@ -65,12 +65,13 @@ object GeminiService {
     }
 
     suspend fun analyzeImages(
-        images: List<DirectAiService.ImagePayload>
+        images: List<DirectAiService.ImagePayload>,
+        scopeInstructions:String=com.example.util.ScanInstructions.build()
     ): List<OcrCardCandidate> {
         if (personalConfigs.isEmpty()) error("請先在設定中加入至少一組 AI API Key")
         return runCatching {
             withPersonalFailover { config ->
-                DirectAiService.analyzeImages(config, images, imagePrompt)
+                DirectAiService.analyzeImages(config, images, imagePrompt, scopeInstructions)
             }
         }
             .onSuccess { _lastError.value = null }
@@ -217,7 +218,7 @@ object GeminiService {
 
     private suspend fun <T> withPersonalFailover(
         request: suspend (PersonalAiConfig) -> T
-    ): T {
+    ): T = kotlinx.coroutines.withTimeout(120_000) {
         var lastError: Throwable? = null
         val available = personalConfigs
             .groupBy { it.provider }
@@ -231,10 +232,11 @@ object GeminiService {
             }
         available.forEach { config ->
             try {
-                return request(config)
+                return@withTimeout request(config)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if(error !is DirectAiService.AiQuotaException && (error !is DirectAiService.AiHttpException || error.code !in setOf(401,403,404,500,502,503,504)))throw error
                 lastError = error
             }
         }

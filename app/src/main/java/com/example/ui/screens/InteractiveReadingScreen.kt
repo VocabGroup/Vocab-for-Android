@@ -477,11 +477,11 @@ private fun localReadingQuestions(cards: List<Flashcard>): List<ReadingQuestion>
 
 private fun highlightedArticle(article: String, cards: List<Flashcard>, highlight: Color): AnnotatedString = buildAnnotatedString {
     append(article)
-    val known = cards.map { it.word.trim().lowercase() }.toSet()
+    cards.sortedByDescending{it.word.length}.forEach{card->com.example.util.ArticleCoverage.pattern(card.word).findAll(article).forEach{match->
+        addStyle(SpanStyle(color=highlight,fontWeight=FontWeight.Bold,background=highlight.copy(alpha=.12f)),match.range.first,match.range.last+1)
+        addStringAnnotation("WORD",card.word,match.range.first,match.range.last+1)
+    }}
     Regex("[A-Za-z]+(?:['’][A-Za-z]+)*").findAll(article).forEach { match ->
         addStringAnnotation("WORD", match.value, match.range.first, match.range.last + 1)
-        if (match.value.lowercase() in known) {
-            addStyle(SpanStyle(color = highlight, fontWeight = FontWeight.Bold, background = highlight.copy(alpha = 0.12f)), match.range.first, match.range.last + 1)
-        }
     }
 }

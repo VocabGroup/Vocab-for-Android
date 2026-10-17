@@ -641,6 +641,7 @@ fun AiAssistantScreen(
                             onQuizRestart = onQuizRestart,
                             onOpenQuiz = { activeQuizMessageId = message.id },
                             onOpenArticle = { activeArticleMessageId = message.id },
+                            onContinueArticle = {onSend("繼續補齊文章",emptyList())},
                             onPreviewImage = { previewImageUri = it }
                         )
                     }
@@ -977,6 +978,7 @@ private fun AssistantMessageBubble(
     onQuizRestart: (String) -> Unit,
     onOpenQuiz: () -> Unit,
     onOpenArticle: () -> Unit,
+    onContinueArticle: () -> Unit,
     onPreviewImage: (Uri) -> Unit
 ) {
     val user = message.role == "USER"
@@ -1057,6 +1059,8 @@ private fun AssistantMessageBubble(
                     )
                 }
                 if (message.kind == "ARTICLE") {
+                    val incomplete=runCatching{JSONObject(message.payload).has("complete")&&!JSONObject(message.payload).optBoolean("complete")}.getOrDefault(false)
+                    if(incomplete)OutlinedButton(onClick=onContinueArticle,modifier=Modifier.fillMaxWidth()){Text("繼續補齊文章")}
                     Button(onClick = onOpenArticle, modifier = Modifier.fillMaxWidth()) {
                         Text("開始互動閱讀")
                     }

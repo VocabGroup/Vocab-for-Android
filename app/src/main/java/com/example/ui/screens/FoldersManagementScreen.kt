@@ -1,5 +1,7 @@
 package com.example.ui.screens
 import com.example.ui.components.ModernCollectionRow
+import com.example.ui.components.FolderSharingPanel
+import com.example.data.importer.SharedFolder
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,10 +92,19 @@ fun FoldersManagementScreen(
     onJumpToStudy: (deckId: Long) -> Unit,
     onJumpToQuiz: (deckId: Long) -> Unit,
     onOpenAssistant: () -> Unit = {},
+    onImportShare:suspend(List<SharedFolder>,String,Boolean)->Result<List<Long>> = {_,_,_->Result.failure(IllegalStateException("匯入尚未連接"))},
+    onUndoShare:suspend(List<Long>)->Result<Unit> = {Result.failure(IllegalStateException("匯入尚未連接"))},
+    shareUndoIds:List<Long> = emptyList(),
+    scanUndoCount:Int=0,
+    onUndoScan:()->Unit={},
     showTopBar: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var showAddMenu by remember {mutableStateOf(false)}
+    var shareDeckId by remember {mutableStateOf<Long?>(null)}
+    var importRequested by remember {mutableStateOf(false)}
+    var confirmUndoScan by remember {mutableStateOf(false)}
     var editingDeck by remember { mutableStateOf<Deck?>(null) }
     var deckToDelete by remember { mutableStateOf<Deck?>(null) }
     var courseToRename by remember { mutableStateOf<String?>(null) }
@@ -136,6 +147,8 @@ fun FoldersManagementScreen(
         }
     }
 
+    if(showAddMenu){AlertDialog(onDismissRequest={showAddMenu=false},title={Text("新增資料夾")},text={Column{TextButton(onClick={showAddMenu=false;showAddDialog=true}){Text("建立資料夾")};TextButton(onClick={showAddMenu=false;importRequested=true}){Text("匯入分享檔案")}}},confirmButton={TextButton(onClick={showAddMenu=false}){Text("取消")}})}
+    if(confirmUndoScan){AlertDialog(onDismissRequest={confirmUndoScan=false},title={Text("撤回上次單字匯入？")},text={Text("移除該批新字卡與後續修改，原有字卡保留。")},confirmButton={TextButton(onClick={confirmUndoScan=false;onUndoScan()}){Text("撤回")}},dismissButton={TextButton(onClick={confirmUndoScan=false}){Text("取消")}})}
     if (showAddDialog) {
         AddFolderDialog(
             existingCourses = courses,
@@ -239,7 +252,7 @@ fun FoldersManagementScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
+                onClick = { showAddMenu = true },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = CircleShape,
@@ -261,6 +274,8 @@ fun FoldersManagementScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
+                FolderSharingPanel(decks,allCards,selectedCourseFilter,shareDeckId,{shareDeckId=null},importRequested,{importRequested=false},onImportShare,onUndoShare,shareUndoIds)
+                if(scanUndoCount>0)TextButton(onClick={confirmUndoScan=true}){Text("撤回上次單字匯入（$scanUndoCount 字）")}
                 // Course Category Filter Chips
                 Text(
                     text = "選擇課程",
@@ -359,7 +374,7 @@ fun FoldersManagementScreen(
                         state = folderReorderState,
                         key = deck.id
                     ) {
-ModernCollectionRow(title = deck.name, subtitle = deck.category, count = totalCardCount, due = dueCount, progress = if (totalCardCount > 0) masteredCount.toFloat() / totalCardCount else 0f, onManage = { onOpenCardList(deck.id) }, onLearn = { onJumpToStudy(deck.id) }, onQuiz = { onJumpToQuiz(deck.id) }, onEdit = { editingDeck = deck }, onDelete = { deckToDelete = deck }, dragModifier = Modifier.draggableHandle())
+ModernCollectionRow(title = deck.name, subtitle = deck.category, count = totalCardCount, due = dueCount, progress = if (totalCardCount > 0) masteredCount.toFloat() / totalCardCount else 0f, onManage = { onOpenCardList(deck.id) }, onLearn = { onJumpToStudy(deck.id) }, onQuiz = { onJumpToQuiz(deck.id) }, onEdit = { editingDeck = deck }, onDelete = { deckToDelete = deck }, onShare = { shareDeckId = deck.id }, dragModifier = Modifier.draggableHandle())
                     }
                 }
             }

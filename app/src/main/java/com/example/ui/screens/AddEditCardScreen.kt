@@ -69,6 +69,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.DisposableEffect
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -124,6 +128,8 @@ fun AddEditCardScreen(
     modifier: Modifier = Modifier
 ) {
     val responsive = rememberResponsiveLayout()
+    val draftContext=LocalContext.current
+    val draftPreferences=remember(draftContext){draftContext.getSharedPreferences("card_editor_drafts",android.content.Context.MODE_PRIVATE)}
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -240,6 +246,12 @@ fun AddEditCardScreen(
     var isInitialized by remember { mutableStateOf(false) }
     var sharedTextApplied by remember(initialSharedText) { mutableStateOf(false) }
     var saveStatus by remember { mutableStateOf("所有變更會自動儲存") }
+    fun saveUnfinishedDraft(ownerDeckId:Long=selectedDeckId){
+        val pending=editableCards.filter{it.originalId==0L&&(it.word.isNotBlank()||it.definition.isNotBlank()||it.exampleSentence.isNotBlank())}
+        val rows=JSONArray(pending.map{JSONObject().put("word",it.word).put("definition",it.definition).put("partOfSpeech",it.partOfSpeech).put("phonetic",it.phonetic).put("exampleSentence",it.exampleSentence).put("exampleTranslation",it.exampleTranslation)})
+        draftPreferences.edit().apply{if(pending.isEmpty())remove("deck-$ownerDeckId") else putString("deck-$ownerDeckId",rows.toString())}.apply()
+    }
+    DisposableEffect(selectedDeckId){val owner=selectedDeckId;onDispose{if(isInitialized)saveUnfinishedDraft(owner)}}
 
     suspend fun autoSave(): Boolean {
         if (!isInitialized) return true
@@ -292,6 +304,7 @@ fun AddEditCardScreen(
                 onSuccess = { savedIds ->
                     validItems.zip(savedIds).forEach { (item, id) -> item.originalId = id }
                     deletedOriginalCards.clear()
+                    saveUnfinishedDraft()
                     saveStatus = "已自動儲存"
                     true
                 },
@@ -306,6 +319,7 @@ fun AddEditCardScreen(
     LaunchedEffect(selectedDeckId) {
         isInitialized = false
         loadCardsForDeck(selectedDeckId)
+        runCatching{val raw=draftPreferences.getString("deck-$selectedDeckId",null);if(raw!=null){val rows=JSONArray(raw);for(index in 0 until rows.length()){val row=rows.getJSONObject(index);val word=row.optString("word");if(word.isBlank()||editableCards.none{it.word.equals(word,true)}){editableCards.add(EditableCardState(initialWord=word,initialDef=row.optString("definition"),initialPos=row.optString("partOfSpeech"),initialPhonetic=row.optString("phonetic"),initialSentence=row.optString("exampleSentence"),initialTranslation=row.optString("exampleTranslation")))}};saveStatus="已恢復未完成草稿"}}
         if (!sharedTextApplied && !initialSharedText.isNullOrBlank()) {
             val sharedWords = Regex("[A-Za-z]+(?:['’-][A-Za-z]+)*")
                 .findAll(initialSharedText)
@@ -343,6 +357,7 @@ fun AddEditCardScreen(
             .distinctUntilChanged()
             .collectLatest {
                 if (isInitialized) {
+                    saveUnfinishedDraft()
                     autoSave()
                 }
             }
@@ -494,7 +509,7 @@ fun AddEditCardScreen(
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        modifier = modifier
+        modifier = modifier.imePadding().navigationBarsPadding()
     ) { innerPadding ->
         LazyColumn(
             state = listState,
@@ -503,8 +518,8 @@ fun AddEditCardScreen(
                 .padding(innerPadding)
                 .padding(top = 6.dp)
                 .padding(horizontal = 14.dp)
-                .navigationBarsPadding()
-                .imePadding(),
+                .testTag("card_editor_list"),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom=88.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Folder & Course Selector Header
