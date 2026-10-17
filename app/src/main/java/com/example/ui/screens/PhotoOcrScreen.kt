@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
@@ -27,6 +26,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -69,6 +69,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.example.ui.components.ModernAlertDialog
 import coil.compose.AsyncImage
 import com.example.util.ScanInstructions
 import kotlinx.coroutines.Job
@@ -85,14 +86,18 @@ import com.example.util.AiImagePreprocessor
 import com.example.util.DocumentParser
 import com.example.util.OcrCardCandidate
 import com.example.util.OcrWordParser
-import com.example.ui.components.rememberResponsiveLayout
-import com.example.ui.components.ImportDestinationSelector
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -115,7 +120,6 @@ fun PhotoOcrScreen(
     pdfPageLimit: Int = 20,
     modifier: Modifier = Modifier
 ) {
-    val responsive = rememberResponsiveLayout()
     val context = LocalContext.current
     var selectedDeckId by remember(decks, initialDeckId) {
         mutableStateOf(
@@ -135,7 +139,10 @@ fun PhotoOcrScreen(
     val imageErrors=remember{androidx.compose.runtime.mutableStateMapOf<Uri,String>()}
     var imageJob by remember{mutableStateOf<Job?>(null)}
     var confirmLeave by remember{mutableStateOf(false)}
-    var importNewFolder by remember{mutableStateOf(false)}
+    var destinationExpanded by remember { mutableStateOf(false) }
+    var modeExpanded by remember { mutableStateOf(false) }
+    var previewImage by remember { mutableStateOf<Uri?>(null) }
+    var showImageQueue by remember { mutableStateOf(false) }
     var importing by remember{mutableStateOf(false)}
     var editingCandidate by remember{mutableStateOf<Int?>(null)}
     var editWord by remember{mutableStateOf("")}
@@ -189,7 +196,7 @@ fun PhotoOcrScreen(
         imageJob=coroutineScope.launch {
             try {
                 selectedUris.forEachIndexed{index,uri->
-                    recognitionProgress="準備／傳送／AI 辨識 第 ${index+1}/${selectedUris.size} 張"
+                    recognitionProgress="正在辨識 ${index+1}／${selectedUris.size} 張"
                     try{
                         val payload=AiImagePreprocessor.prepare(context,uri)
                         val parsed=GeminiService.analyzeImages(listOf(payload),ScanInstructions.build(scanMode,customScan))
@@ -307,13 +314,28 @@ fun PhotoOcrScreen(
             isAiEnriching = false
         }
     }
-    editingCandidate?.let{index->androidx.compose.material3.AlertDialog(onDismissRequest={editingCandidate=null},title={Text("編輯辨識內容")},text={Column{OutlinedTextField(value=editWord,onValueChange={editWord=it},label={Text("單字")});OutlinedTextField(value=editDefinition,onValueChange={editDefinition=it},label={Text("解釋")})}},confirmButton={TextButton(enabled=editWord.isNotBlank(),onClick={if(index in localCandidates.indices)localCandidates[index]=localCandidates[index].copy(word=editWord.trim(),definition=editDefinition.trim());editingCandidate=null}){Text("儲存")}},dismissButton={TextButton(onClick={editingCandidate=null}){Text("取消")}})}
+    editingCandidate?.let { index ->
+        ModernAlertDialog(
+            onDismissRequest = { editingCandidate = null },
+            title = { Text("編輯辨識內容") },
+            text = {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = editWord, onValueChange = { editWord = it }, label = { Text("單字") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = editDefinition, onValueChange = { editDefinition = it }, label = { Text("解釋") }, minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = { TextButton(enabled = editWord.isNotBlank(), onClick = {
+                if (index in localCandidates.indices) localCandidates[index] = localCandidates[index].copy(word = editWord.trim(), definition = editDefinition.trim())
+                editingCandidate = null
+            }) { Text("儲存") } },
+            dismissButton = { TextButton(onClick = { editingCandidate = null }) { Text("取消") } }
+        )
+    }
     fun importCandidates() {
         val deckId = selectedDeckId ?: return
         if(importing)return;importing=true
         val done:(Boolean)->Unit={success->importing=false;if(!success)coroutineScope.launch{snackbarHostState.showSnackbar("匯入未完成，辨識結果保留，請檢查儲存空間後重試")}}
-        if(importNewFolder)onImportToNewFolder(localCandidates.filter{it.isSelected},deckId,done)
-        else onImportCandidates(localCandidates.filter { it.isSelected }, deckId,done)
+        onImportCandidates(localCandidates.filter { it.isSelected }, deckId,done)
     }
 
     if(confirmLeave){androidx.compose.material3.AlertDialog(onDismissRequest={confirmLeave=false},title={Text("作業仍在進行")},text={Text("離開會取消尚未完成的圖片辨識，確定離開嗎？")},confirmButton={TextButton(onClick={imageJob?.cancel();confirmLeave=false;onBack()}){Text("取消作業並離開")}},dismissButton={TextButton(onClick={confirmLeave=false}){Text("繼續等待")}})}
@@ -353,7 +375,7 @@ fun PhotoOcrScreen(
                             onClick = ::importCandidates,
                             enabled = selectedDeckId != null && localCandidates.any { it.isSelected } && !isOcrScanning && !isAiEnriching && !importing,
                             modifier = Modifier.weight(1f).testTag("batch_import_button")
-                        ) { Icon(Icons.Default.Check, null); Text("確認匯入") }
+                        ) { Text("匯入（${localCandidates.count { it.isSelected }}）", maxLines = 1) }
                     }
                 }
             }
@@ -365,8 +387,8 @@ fun PhotoOcrScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(top = 6.dp)
-                .padding(responsive.horizontalPadding),
-            verticalArrangement = Arrangement.spacedBy(if (responsive.isConstrained) 8.dp else 16.dp)
+                .padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             if (decks.isEmpty()) {
                 Card(
@@ -380,13 +402,34 @@ fun PhotoOcrScreen(
                         modifier = Modifier.padding(14.dp)
                     )
                 }
-            } else {
-                ImportDestinationSelector(
-                    decks = decks,
-                    selectedDeckId = selectedDeckId,
-                    onDeckSelected = { selectedDeckId = it }
-                )
             }
+
+            Row(Modifier.fillMaxWidth().testTag("scan_options_row"), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(Modifier.weight(1f)) {
+                    TextButton(enabled = decks.isNotEmpty() && !isOcrScanning && !importing, onClick = { destinationExpanded = true }, modifier = Modifier.fillMaxWidth().testTag("scan_destination")) {
+                        val deck = decks.firstOrNull { it.id == selectedDeckId }
+                        Text(deck?.let { "${it.category} › ${it.name}" } ?: "選擇資料夾", modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Icon(Icons.Default.KeyboardArrowDown, null, Modifier.size(18.dp))
+                    }
+                    DropdownMenu(expanded = destinationExpanded, onDismissRequest = { destinationExpanded = false }) {
+                        decks.forEach { deck ->
+                            DropdownMenuItem(text = { Text("${deck.category} › ${deck.name}") }, onClick = { selectedDeckId = deck.id; destinationExpanded = false })
+                        }
+                    }
+                }
+                Box(Modifier.weight(1f)) {
+                    TextButton(enabled = !isOcrScanning && !isAiEnriching && !importing, onClick = { modeExpanded = true }, modifier = Modifier.fillMaxWidth().testTag("scan_scope")) {
+                        Text(scanMode, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Icon(Icons.Default.KeyboardArrowDown, null, Modifier.size(18.dp))
+                    }
+                    DropdownMenu(expanded = modeExpanded, onDismissRequest = { modeExpanded = false }) {
+                        listOf("主單字／標題", "全部明列詞條", "自訂範圍").forEach { mode ->
+                            DropdownMenuItem(text = { Text(mode) }, onClick = { scanMode = mode; modeExpanded = false })
+                        }
+                    }
+                }
+            }
+            if (scanMode == "自訂範圍") OutlinedTextField(value = customScan, onValueChange = { customScan = it }, enabled = !isOcrScanning, label = { Text("例如：只辨識左欄畫線的主單字") }, maxLines = 2, modifier = Modifier.fillMaxWidth())
 
             if (!aiAvailable) {
                 Card(
@@ -404,24 +447,9 @@ fun PhotoOcrScreen(
                 }
             }
 
-            Column(Modifier.heightIn(max=240.dp).verticalScroll(rememberScrollState())){
-            Row(horizontalArrangement=Arrangement.spacedBy(4.dp)){listOf("主單字／標題","全部明列詞條","自訂範圍").forEach{mode->TextButton(enabled=!isOcrScanning,onClick={scanMode=mode}){Text((if(scanMode==mode)"✓ " else "")+mode)}}}
-            if(scanMode=="自訂範圍")OutlinedTextField(value=customScan,onValueChange={customScan=it},label={Text("例如：只辨識左欄畫線的主單字")},modifier=Modifier.fillMaxWidth())
-            if(pendingImages.isNotEmpty()){
-                LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.fillMaxWidth()){
-                    itemsIndexed(pendingImages){index,uri->Column(Modifier.width(112.dp)){
-                        AsyncImage(model=uri,contentDescription="第 ${index+1} 張圖片",modifier=Modifier.size(90.dp))
-                        Text(if(uri in completedImages)"完成" else imageErrors[uri]?:"等待",maxLines=2,style=MaterialTheme.typography.labelSmall)
-                        Row{TextButton(enabled=!isOcrScanning&&index>0,onClick={val previous=pendingImages[index-1];pendingImages[index-1]=uri;pendingImages[index]=previous}){Text("↑")};TextButton(enabled=!isOcrScanning,onClick={pendingImages.remove(uri);imageErrors.remove(uri)}){Text("移除")}}
-                    }}
-                }
-                if(isOcrScanning)TextButton(onClick={imageJob?.cancel()}){Text("停止（保留成功結果）")}
-                else Button(enabled=pendingImages.any{it !in completedImages}&&(scanMode!="自訂範圍"||customScan.isNotBlank()),onClick={processImageUris(pendingImages.toList(),"圖片辨識")}){Text("開始／重試未完成圖片")}
-            }
-            }
-            val sourceButtonsEnabled = !isOcrScanning && !isScannerLaunching
+            val sourceButtonsEnabled = !isOcrScanning && !isScannerLaunching && !isAiEnriching && !importing
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilledTonalIconButton(
                     onClick = {
                         runCatching {
@@ -452,7 +480,7 @@ fun PhotoOcrScreen(
                         .weight(1f)
                         .heightIn(min = 48.dp)
                         .testTag("take_photo_ocr_button")
-                ) { Icon(Icons.Default.CameraAlt, "拍照", modifier = Modifier.size(24.dp)) }
+                ) { ScanSourceLabel(Icons.Default.CameraAlt, "拍照") }
                 FilledTonalIconButton(
                     onClick = {
                         val activity = context.findActivity()
@@ -487,7 +515,7 @@ fun PhotoOcrScreen(
                         .weight(1f)
                         .heightIn(min = 48.dp)
                         .testTag("document_scanner_button")
-                ) { Icon(Icons.Default.DocumentScanner, "掃描", modifier = Modifier.size(24.dp)) }
+                ) { ScanSourceLabel(Icons.Default.DocumentScanner, "掃描") }
                 FilledTonalIconButton(
                     onClick = { photoPickerLauncher.launch("image/*") },
                     enabled = sourceButtonsEnabled && aiAvailable,
@@ -496,7 +524,7 @@ fun PhotoOcrScreen(
                         .weight(1f)
                         .heightIn(min = 48.dp)
                         .testTag("select_photo_ocr_button")
-                ) { Icon(Icons.Default.PhotoLibrary, "相片", modifier = Modifier.size(24.dp)) }
+                ) { ScanSourceLabel(Icons.Default.PhotoLibrary, "相片") }
                 FilledTonalIconButton(
                     onClick = {
                         docPickerLauncher.launch(
@@ -517,7 +545,39 @@ fun PhotoOcrScreen(
                         .weight(1f)
                         .heightIn(min = 48.dp)
                         .testTag("select_file_doc_button")
-                ) { Icon(Icons.Default.Folder, "檔案", modifier = Modifier.size(24.dp)) }
+                ) { ScanSourceLabel(Icons.Default.Folder, "檔案") }
+            }
+
+            if (pendingImages.isNotEmpty() && localCandidates.isNotEmpty()) {
+                TextButton(onClick = { showImageQueue = !showImageQueue }, modifier = Modifier.fillMaxWidth()) {
+                    Text("圖片 ${pendingImages.size} 張 · 完成 ${completedImages.size} 張${if (imageErrors.isEmpty()) "" else " · 失敗 ${imageErrors.size} 張"}", modifier = Modifier.weight(1f), maxLines = 1)
+                    Icon(if (showImageQueue) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, "展開或收合圖片")
+                }
+            }
+            if (pendingImages.isNotEmpty() && (localCandidates.isEmpty() || showImageQueue || isOcrScanning || pendingImages.any { it !in completedImages })) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().testTag("scan_image_queue")) {
+                    itemsIndexed(pendingImages, key = { _, uri -> uri.toString() }) { index, uri ->
+                        Column(Modifier.width(104.dp)) {
+                            TextButton(onClick = { previewImage = uri }, modifier = Modifier.fillMaxWidth()) {
+                                Box {
+                                    AsyncImage(model = uri, contentDescription = "預覽第 ${index + 1} 張圖片", contentScale = ContentScale.Crop, modifier = Modifier.size(64.dp))
+                                    Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = .9f), modifier = Modifier.align(Alignment.BottomEnd)) {
+                                        Text("${index + 1} · ${if (uri in completedImages) "完成" else if (uri in imageErrors) "失敗" else "待辨識"}", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                            Row {
+                                IconButton(enabled = sourceButtonsEnabled && index > 0, onClick = { val previous = pendingImages[index - 1]; pendingImages[index - 1] = uri; pendingImages[index] = previous }) { Icon(Icons.Default.KeyboardArrowUp, "第 ${index + 1} 張向前移動") }
+                                IconButton(enabled = sourceButtonsEnabled, onClick = { pendingImages.remove(uri); imageErrors.remove(uri); completedImages.remove(uri) }) { Icon(Icons.Default.DeleteOutline, "移除第 ${index + 1} 張圖片") }
+                            }
+                        }
+                    }
+                }
+                if (!isOcrScanning && pendingImages.any { it !in completedImages }) {
+                    Button(enabled = sourceButtonsEnabled && aiAvailable && (scanMode != "自訂範圍" || customScan.isNotBlank()), onClick = { processImageUris(pendingImages.toList(), "圖片辨識") }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (imageErrors.isEmpty()) "開始辨識（${pendingImages.count { it !in completedImages }} 張）" else "重試未完成圖片（${pendingImages.count { it !in completedImages }} 張）", maxLines = 1)
+                    }
+                }
             }
 
             if (isOcrScanning || isScannerLaunching) {
@@ -528,35 +588,41 @@ fun PhotoOcrScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                         Text(
                             if (isScannerLaunching) "正在準備文件掃描…" else recognitionProgress.ifBlank { "正在辨識圖片…" },
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2
                         )
+                        if (imageJob != null) TextButton(onClick = { imageJob?.cancel() }) { Text("停止") }
                     }
                 }
             }
 
             // Extracted Candidates Table List
-            if(localCandidates.isNotEmpty())Row{Checkbox(checked=importNewFolder,onCheckedChange={importNewFolder=it});Text("重複單字另建資料夾（預設略過已有單字）",style=MaterialTheme.typography.bodySmall)}
             if (localCandidates.isNotEmpty()) {
-                Text(
-                    text = "找到 ${localCandidates.size} 張",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("已選 ${localCandidates.count { it.isSelected }}／${localCandidates.size}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                    TextButton(enabled = sourceButtonsEnabled, onClick = {
+                        val select = localCandidates.any { !it.isSelected }
+                        localCandidates.indices.forEach { localCandidates[it] = localCandidates[it].copy(isSelected = select) }
+                    }) { Text(if (localCandidates.all { it.isSelected }) "取消全選" else "全選") }
+                }
 
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     LazyColumn(
                         state = candidateListState,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize().testTag("scan_results")
                     ) {
                         itemsIndexed(localCandidates) { index, candidate ->
+                        var actionsExpanded by remember(candidate.word) { mutableStateOf(false) }
+                        var showExamples by remember(candidate.word) { mutableStateOf(false) }
                         Card(
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -564,54 +630,49 @@ fun PhotoOcrScreen(
                         ) {
                             Row(
                                 modifier = Modifier
-                                    .padding(12.dp)
+                                    .padding(horizontal = 4.dp, vertical = 4.dp)
                                     .fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Checkbox(
                                     checked = candidate.isSelected,
+                                    enabled = sourceButtonsEnabled,
                                     onCheckedChange = { checked ->
                                         localCandidates[index] = candidate.copy(isSelected = checked)
                                     }
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     if(existingCards.any{it.deckId==selectedDeckId&&it.normalizedWord==candidate.word.trim().lowercase()})Text("目標資料夾已有此單字",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.labelSmall)
-                                    TextButton(onClick={editingCandidate=index;editWord=candidate.word;editDefinition=candidate.definition}){Text("編輯辨識內容")}
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Text(
                                             text = candidate.word,
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.weight(1f)
                                         )
-                                        if (candidate.phonetic.isNotBlank()) {
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = candidate.phonetic,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.secondary
-                                            )
-                                        }
                                         if (candidate.partOfSpeech.isNotBlank()) {
-                                            Spacer(modifier = Modifier.width(8.dp))
                                             Surface(
                                                 color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
-                                                shape = RoundedCornerShape(6.dp)
+                                                shape = RoundedCornerShape(6.dp),
+                                                modifier = Modifier.widthIn(max = 64.dp)
                                             ) {
                                                 Text(
                                                     text = candidate.partOfSpeech,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
                                                     style = MaterialTheme.typography.labelSmall,
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                 )
                                             }
                                         }
                                     }
+                                    if (candidate.phonetic.isNotBlank()) Text(candidate.phonetic, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = candidate.definition.ifBlank { "待補齊" },
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                                     )
-                                    if (candidate.exampleSentence.isNotBlank()) {
+                                    if (showExamples && candidate.exampleSentence.isNotBlank()) {
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
                                             text = "例: ${candidate.exampleSentence}",
@@ -619,7 +680,7 @@ fun PhotoOcrScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                                         )
                                     }
-                                    if (candidate.exampleTranslation.isNotBlank()) {
+                                    if (showExamples && candidate.exampleTranslation.isNotBlank()) {
                                         Text(
                                             text = candidate.exampleTranslation,
                                             style = MaterialTheme.typography.bodySmall,
@@ -628,45 +689,45 @@ fun PhotoOcrScreen(
                                     }
                                 }
 
-                                IconButton(
-                                    onClick = { localCandidates.removeAt(index) }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DeleteOutline,
-                                        contentDescription = "移除此項",
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
+                                Box {
+                                    IconButton(enabled = sourceButtonsEnabled, onClick = { actionsExpanded = true }) { Icon(Icons.Default.MoreVert, "${candidate.word} 的操作") }
+                                    DropdownMenu(expanded = actionsExpanded, onDismissRequest = { actionsExpanded = false }) {
+                                        DropdownMenuItem(text = { Text("編輯") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { actionsExpanded = false; editingCandidate = index; editWord = candidate.word; editDefinition = candidate.definition })
+                                        if (candidate.exampleSentence.isNotBlank() || candidate.exampleTranslation.isNotBlank()) DropdownMenuItem(text = { Text(if (showExamples) "收起例句" else "顯示例句") }, onClick = { actionsExpanded = false; showExamples = !showExamples })
+                                        DropdownMenuItem(text = { Text("移除") }, leadingIcon = { Icon(Icons.Default.DeleteOutline, null) }, onClick = { actionsExpanded = false; localCandidates.removeAt(index) })
+                                    }
                                 }
                             }
                         }
                         }
                     }
-                    if (candidateListState.canScrollBackward) {
-                        FloatingActionButton(
-                            onClick = { coroutineScope.launch { candidateListState.animateScrollToItem(0) } },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(44.dp)
-                        ) { Icon(Icons.Default.KeyboardArrowUp, "回到第一個單字") }
-                    }
-                    if (candidateListState.canScrollForward) {
-                        FloatingActionButton(
-                            onClick = {
-                                coroutineScope.launch {
-                                    candidateListState.animateScrollToItem((localCandidates.size - 1).coerceAtLeast(0))
-                                }
-                            },
-                            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(44.dp)
-                        ) { Icon(Icons.Default.KeyboardArrowDown, "前往最後一個單字") }
-                    }
                 }
+            } else if (pendingImages.isNotEmpty()) {
+                val activeUri = pendingImages.firstOrNull { it !in completedImages } ?: pendingImages.first()
+                AsyncImage(model = activeUri, contentDescription = "目前辨識圖片", contentScale = ContentScale.Fit, modifier = Modifier.weight(1f).fillMaxWidth().testTag("scan_large_preview"))
             } else if (!isOcrScanning && !isScannerLaunching) {
-                com.example.ui.components.CalmEmptyState(
-                    icon = Icons.Default.DocumentScanner,
-                    title = "等待辨識內容",
-                    message = "拍照、掃描文件，或選擇現有檔案。",
-                    modifier = Modifier.weight(1f)
-                )
+                Text("拍照、掃描文件，或選擇多張相片開始辨識。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
             }
         }
+    }
+    previewImage?.let { uri ->
+        androidx.compose.ui.window.Dialog(onDismissRequest = { previewImage = null }) {
+            Surface(shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth()) {
+                    TextButton(onClick = { previewImage = null }, modifier = Modifier.align(Alignment.End)) { Text("關閉預覽") }
+                    AsyncImage(model = uri, contentDescription = "圖片完整預覽", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp))
+                    imageErrors[uri]?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScanSourceLabel(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Icon(icon, null, Modifier.size(20.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }
 
