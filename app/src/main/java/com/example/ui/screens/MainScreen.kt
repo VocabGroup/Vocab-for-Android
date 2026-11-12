@@ -1,6 +1,12 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.luminance
+import com.example.ui.components.glassRim
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -110,23 +116,13 @@ fun MainScreen(
         initialPage = currentTab,
         pageCount = { 5 }
     )
-    val tabs = if (grammarMode) {
-        listOf(
-            MainTabSpec("總覽", Icons.Default.Home, "總覽", "nav_tab_home"),
-            MainTabSpec("文法庫", Icons.Default.MenuBook, "文法庫", "nav_tab_folders"),
-            MainTabSpec("學習", Icons.Default.Style, "學習", "nav_tab_study"),
-            MainTabSpec("測驗", Icons.Default.Quiz, "測驗", "nav_tab_quiz"),
-            MainTabSpec("作文", Icons.Default.EditNote, "作文", "nav_tab_library_tool")
-        )
-    } else {
-        listOf(
-            MainTabSpec("主畫面", Icons.Default.Home, "主畫面", "nav_tab_home"),
-            MainTabSpec("資料夾", Icons.Default.Folder, "資料夾", "nav_tab_folders"),
-            MainTabSpec("學習", Icons.Default.Style, "學習", "nav_tab_study"),
-            MainTabSpec("測驗", Icons.Default.Extension, "測驗", "nav_tab_quiz"),
-            MainTabSpec("文章", Icons.Default.Article, "文章", "nav_tab_library_tool")
-        )
-    }
+    val tabs = listOf(
+        MainTabSpec("今天", Icons.Default.Home, "今天", "nav_tab_home"),
+        MainTabSpec("教材庫", Icons.Default.Folder, "教材庫", "nav_tab_folders"),
+        MainTabSpec("練習", Icons.Default.Style, "練習", "nav_tab_study"),
+        MainTabSpec("AI", Icons.Default.AutoAwesome, "Vocab AI", "nav_tab_ai")
+    )
+    val selectedNavigation = when(pagerState.currentPage) { 0 -> 0; 1,4 -> 1; else -> 2 }
 
     LaunchedEffect(currentTab) {
         if (pagerState.currentPage != currentTab) {
@@ -181,7 +177,7 @@ fun MainScreen(
                                 }
                             } else {
                                 Text(
-                                    tabs[page].label,
+                                    when(page) { 1 -> if(grammar) "文法教材庫" else "教材庫"; 2,3 -> "練習"; else -> if(grammar) "作文" else "文章" },
                                     style = MaterialTheme.typography.titleLarge
                                 )
                             }
@@ -225,11 +221,22 @@ fun MainScreen(
         modifier = modifier
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
+        Column(Modifier.fillMaxSize()) {
+            if(pagerState.currentPage in 1..4) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if(pagerState.currentPage == 1 || pagerState.currentPage == 4) {
+                    TextButton(onClick = { onTabSelected(1) }) { Text(if(grammarMode) "文法庫" else "單字資料夾") }
+                    TextButton(onClick = { onTabSelected(4) }, modifier = Modifier.testTag("nav_tab_library_tool")) { Text(if(grammarMode) "作文" else "文章") }
+                } else {
+                    TextButton(onClick = { onTabSelected(2) }) { Text("翻卡學習") }
+                    TextButton(onClick = { onTabSelected(3) }, modifier = Modifier.testTag("nav_tab_quiz")) { Text("測驗練習") }
+                }
+            }
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = showBottomNavigation,
+            userScrollEnabled = false,
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .onGloballyPositioned { pagePosition = it.positionInRoot() }
                 .drawWithContent {
                     pageLayer.record { this@drawWithContent.drawContent() }
@@ -244,6 +251,7 @@ fun MainScreen(
                 4 -> libraryToolContent()
             }
         }
+        }
 
             if (showBottomNavigation) Box(
                 modifier = Modifier
@@ -255,13 +263,15 @@ fun MainScreen(
             ) {
                 Box(
                     Modifier.fillMaxWidth()
-                        .shadow(20.dp, RoundedCornerShape(34.dp))
+                        .shadow(14.dp, RoundedCornerShape(34.dp), ambientColor = Color.Black.copy(alpha = .14f), spotColor = Color.Black.copy(alpha = .2f))
                         .clip(RoundedCornerShape(34.dp))
+                        .glassRim(RoundedCornerShape(34.dp))
+                        .testTag("glass_navigation")
                         .onGloballyPositioned { barPosition = it.positionInRoot() }
                 ) {
                 Canvas(
                     Modifier.matchParentSize().graphicsLayer {
-                        renderEffect = BlurEffect(24f, 24f)
+                        if (android.os.Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(32f, 32f)
                     }
                 ) {
                     val delta = pagePosition - barPosition
@@ -274,25 +284,30 @@ fun MainScreen(
                 }
                 Surface(
                     shape = RoundedCornerShape(34.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = if (android.os.Build.VERSION.SDK_INT < 31) .94f else if (MaterialTheme.colorScheme.surface.luminance() < .5f) .38f else .26f),
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     tonalElevation = 0.dp,
                     shadowElevation = 0.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    BoxWithConstraints(Modifier.fillMaxWidth().height(64.dp).padding(5.dp)) {
+                    val tabWidth = maxWidth / tabs.size
+                    val indicatorX by animateDpAsState(tabWidth * selectedNavigation, spring(dampingRatio = .85f, stiffness = 450f), label = "glass_selection")
+                    Box(Modifier.offset(x = indicatorX).width(tabWidth).height(54.dp)
+                        .shadow(2.dp, RoundedCornerShape(28.dp), ambientColor = Color.Black.copy(alpha = .08f), spotColor = Color.Black.copy(alpha = .12f))
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = .36f))
+                        .glassRim(RoundedCornerShape(28.dp)))
                     Row(
-                        modifier = Modifier.fillMaxWidth().height(70.dp).padding(5.dp),
+                        modifier = Modifier.fillMaxSize(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         tabs.forEachIndexed { index, tab ->
-                            val selected = pagerState.currentPage == index
+                            val selected = selectedNavigation == index
                             Surface(
-                                onClick = { onTabSelected(index) },
+                                onClick = { if(index == 3) onOpenAssistant() else onTabSelected(index) },
                                 shape = RoundedCornerShape(28.dp),
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                                } else Color.Transparent,
+                                color = Color.Transparent,
                                 contentColor = if (selected) {
                                     MaterialTheme.colorScheme.onSurface
                                 } else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -322,6 +337,7 @@ fun MainScreen(
                                 }
                             }
                         }
+                    }
                     }
                 }
                 }

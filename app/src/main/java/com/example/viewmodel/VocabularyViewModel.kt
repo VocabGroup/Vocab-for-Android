@@ -1670,6 +1670,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                 settingsRepository.resetAfterDataClear()
                 aiCredentialsStore.clear()
                 learningSessionStore.clearAll()
+                getApplication<Application>().getSharedPreferences("quiz_checkpoint_v1",Context.MODE_PRIVATE).edit().clear().apply()
                 studyCheckInStore.clear()
                 assistantChatStore.clear()
                 pronunciationPracticeStore.clear()

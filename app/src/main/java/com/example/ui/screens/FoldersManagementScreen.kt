@@ -59,6 +59,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,6 +107,7 @@ fun FoldersManagementScreen(
     var showAddMenu by remember {mutableStateOf(false)}
     var shareDeckId by remember {mutableStateOf<Long?>(null)}
     var importRequested by remember {mutableStateOf(false)}
+    var importLinkRequested by remember {mutableStateOf(false)}
     var confirmUndoScan by remember {mutableStateOf(false)}
     var editingDeck by remember { mutableStateOf<Deck?>(null) }
     var deckToDelete by remember { mutableStateOf<Deck?>(null) }
@@ -115,10 +119,9 @@ fun FoldersManagementScreen(
     }
     var selectedCourseFilter by remember { mutableStateOf<String?>(null) }
 
-    val filteredDecks = remember(decks, selectedCourseFilter) {
-        if (selectedCourseFilter == null) decks
-        else decks.filter { it.category == selectedCourseFilter }
-    }
+    var expandedCourses by rememberSaveable { mutableStateOf(listOf<String>()) }
+    var shareCourse by remember { mutableStateOf<String?>(null) }
+    val filteredDecks = decks
     val sourceDeckIds = filteredDecks.map { it.id }
     var displayedDeckIds by remember(sourceDeckIds) { mutableStateOf(sourceDeckIds) }
     val displayedDecks = displayedDeckIds.mapNotNull { id -> filteredDecks.firstOrNull { it.id == id } }
@@ -127,14 +130,17 @@ fun FoldersManagementScreen(
     val folderReorderState = rememberReorderableLazyListState(
         lazyListState = folderListState
     ) { from, to ->
-        // The course selector occupies the first LazyColumn position.
-        if (displayedDeckIds.isNotEmpty()) {
-            val fromIndex = (from.index - 1).coerceIn(displayedDeckIds.indices)
-            val toIndex = (to.index - 1).coerceIn(displayedDeckIds.indices)
-            if (fromIndex != toIndex) {
-                displayedDeckIds = displayedDeckIds.toMutableList().apply {
-                    add(toIndex, removeAt(fromIndex))
-                }
+        val fromId = from.key as? Long
+        val toId = to.key as? Long
+        if (fromId != null && toId != null && decks.firstOrNull { it.id == fromId }?.category == decks.firstOrNull { it.id == toId }?.category) {
+            val fromIndex = displayedDeckIds.indexOf(fromId)
+            val toIndex = displayedDeckIds.indexOf(toId)
+            if (fromIndex in displayedDeckIds.indices && toIndex in displayedDeckIds.indices && fromIndex != toIndex) {
+                val course=decks.first{it.id==fromId}.category
+                val scoped=displayedDeckIds.filter{id->decks.any{it.id==id&&it.category==course}}.toMutableList()
+                val target=scoped.indexOf(toId);scoped.add(target,scoped.removeAt(scoped.indexOf(fromId)))
+                val scopeIds=scoped.toSet();var cursor=0
+                displayedDeckIds=displayedDeckIds.map{if(it in scopeIds)scoped[cursor++] else it}
                 folderOrderChanged = true
             }
         }
@@ -215,7 +221,7 @@ fun FoldersManagementScreen(
                     onClick = {
                         val newName = renamedCourseValue.trim()
                         onRenameCourse(originalName, newName) { success ->
-                            if (success) selectedCourseFilter = newName
+                            if (success) { selectedCourseFilter = newName; expandedCourses=expandedCourses.map{if(it==originalName)newName else it} }
                             courseToRename = null
                         }
                     },
@@ -239,7 +245,7 @@ fun FoldersManagementScreen(
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("資料夾", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text("教材庫", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     }
                 },
                 actions = {
@@ -263,90 +269,24 @@ fun FoldersManagementScreen(
         },
         modifier = modifier
     ) { innerPadding ->
+        Column(Modifier.fillMaxSize().padding(innerPadding)) {
+        FolderSharingPanel(decks,allCards,selectedCourseFilter,shareDeckId,{shareDeckId=null},importRequested,{importRequested=false},onImportShare,onUndoShare,shareUndoIds,requestCourse=shareCourse,onCourseRequestHandled={shareCourse=null},showActions=false,importLinkRequested=importLinkRequested,onLinkRequestHandled={importLinkRequested=false})
         LazyColumn(
             state = folderListState,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+                .testTag("folder_list")
+                .weight(1f)
+                .fillMaxWidth()
                 .padding(top = if (showTopBar) 6.dp else 0.dp)
                 .padding(horizontal = 16.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                FolderSharingPanel(decks,allCards,selectedCourseFilter,shareDeckId,{shareDeckId=null},importRequested,{importRequested=false},onImportShare,onUndoShare,shareUndoIds)
                 if(scanUndoCount>0)TextButton(onClick={confirmUndoScan=true}){Text("撤回上次單字匯入（$scanUndoCount 字）")}
-                // Course Category Filter Chips
-                Text(
-                    text = "選擇課程",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    item {
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (selectedCourseFilter == null) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.clickable { selectedCourseFilter = null }
-                        ) {
-                            Text(
-                                text = "全部資料夾 (${decks.size})",
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                color = if (selectedCourseFilter == null) MaterialTheme.colorScheme.onPrimaryContainer
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                            )
-                        }
-                    }
-
-                    items(courses) { course ->
-                        val count = decks.count { it.category == course }
-                        val isSelected = selectedCourseFilter == course
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.clickable {
-                                    selectedCourseFilter = if (isSelected) null else course
-                                }
-                        ) {
-                            Text(
-                                text = "$course ($count)",
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                            )
-                        }
-                    }
-                }
-
-                selectedCourseFilter?.let { course ->
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = {
-                            renamedCourseValue = course
-                            courseToRename = course
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("重新命名課程「$course」")
-                    }
-                } ?: Text(
-                    text = "拖曳卡片右上方把手可調整整體順序。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
+                Text("我的課程", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
+                TextButton(onClick={importLinkRequested=true}) { Text("匯入分享網址") }
+                Text("展開課程即可開啟教材；長按把手可在同課程排序。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             if (displayedDecks.isEmpty()) {
@@ -358,7 +298,27 @@ fun FoldersManagementScreen(
                     )
                 }
             } else {
-                itemsIndexed(displayedDecks, key = { _, deck -> deck.id }) { _, deck ->
+                courses.forEach { course ->
+                    item(key = "course:$course") {
+                        Surface(onClick = {
+                            selectedCourseFilter = course
+                            expandedCourses = if (course in expandedCourses) expandedCourses - course else expandedCourses + course
+                        }, shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth().testTag("course_$course")) {
+                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(course, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Text("${decks.count { it.category == course }} 個資料夾", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Icon(if (course in expandedCourses) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, if (course in expandedCourses) "收合課程" else "展開課程")
+                            }
+                        }
+                        if (course in expandedCourses) Row {
+                            TextButton(onClick = { shareCourse = course }) { Text("分享課程") }
+                            TextButton(onClick = { selectedCourseFilter = course; showAddMenu = true }) { Text("新增教材") }
+                            IconButton(onClick = { renamedCourseValue = course; courseToRename = course }) { Icon(Icons.Default.Edit, "重新命名課程") }
+                        }
+                    }
+                    if (course in expandedCourses) itemsIndexed(displayedDecks.filter { it.category == course }, key = { _, deck -> deck.id }) { _, deck ->
                     val deckCards = allCards.filter { it.deckId == deck.id }
                     val totalCardCount = deckCards.size
                     val masteredCount = deckCards.count { it.isMastered }
@@ -374,14 +334,16 @@ fun FoldersManagementScreen(
                         state = folderReorderState,
                         key = deck.id
                     ) {
-ModernCollectionRow(title = deck.name, subtitle = deck.category, count = totalCardCount, due = dueCount, progress = if (totalCardCount > 0) masteredCount.toFloat() / totalCardCount else 0f, onManage = { onOpenCardList(deck.id) }, onLearn = { onJumpToStudy(deck.id) }, onQuiz = { onJumpToQuiz(deck.id) }, onEdit = { editingDeck = deck }, onDelete = { deckToDelete = deck }, onShare = { shareDeckId = deck.id }, dragModifier = Modifier.draggableHandle())
+ModernCollectionRow(title = deck.name, subtitle = "", count = totalCardCount, due = dueCount.takeIf { it > 0 }, progress = if (totalCardCount > 0) masteredCount.toFloat() / totalCardCount else null, onManage = { onOpenCardList(deck.id) }, onLearn = { onJumpToStudy(deck.id) }, onQuiz = { onJumpToQuiz(deck.id) }, onEdit = { editingDeck = deck }, onDelete = { deckToDelete = deck }, onShare = { shareDeckId = deck.id }, dragModifier = Modifier.draggableHandle())
                     }
                 }
             }
 
+            }
             item {
                 Spacer(modifier = Modifier.height(24.dp))
             }
+        }
         }
     }
 }

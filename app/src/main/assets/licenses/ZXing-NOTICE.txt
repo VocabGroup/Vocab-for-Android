@@ -1,0 +1,6 @@
+ZXing core 3.5.3
+Copyright ZXing authors
+https://github.com/zxing/zxing
+Licensed under the Apache License, Version 2.0.
+The full license is provided in Apache-2.0.txt in this directory.
+Used to generate QR codes locally; no QR service receives share links.

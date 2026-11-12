@@ -1,4 +1,10 @@
 package com.example.ui.screens
+import org.json.JSONObject
+import com.example.util.longList
+import com.example.util.intList
+import com.example.util.stringList
+import com.example.util.list
+import androidx.compose.runtime.SideEffect
 import com.example.ui.components.ModernChoiceRow
 import com.example.ui.components.ModernCollectionRow
 
@@ -150,8 +156,21 @@ fun QuizGamesScreen(
     modifier: Modifier = Modifier
 ) {
     var activeGameDeckIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val quizContext = LocalContext.current
+    val quizPrefs = remember { quizContext.getSharedPreferences("quiz_checkpoint_v1", android.content.Context.MODE_PRIVATE) }
+    var savedQuiz by remember { mutableStateOf(quizPrefs.getString("session", null)) }
+    var resumeProgress by remember { mutableStateOf<JSONObject?>(null) }
+    var requestedCount by rememberSaveable { mutableStateOf("20") }
+    var activeCount by remember { mutableIntStateOf(20) }
     var activeGameTitle by remember { mutableStateOf("") }
     var selectedPlayMode by remember { mutableStateOf<QuizPlayMode?>(null) }
+    fun fingerprint(ids:Set<Long>) = cards.filter{it.deckId in ids}.sortedBy{it.id}.joinToString("|"){"${it.id}:${it.word}:${it.definition}:${it.exampleSentence}:${it.partOfSpeech}"}.hashCode()
+    fun checkpoint(progress:JSONObject) {
+        val mode=selectedPlayMode?:return
+        if(progress.optBoolean("complete")){quizPrefs.edit().remove("session").apply();return}
+        val raw=JSONObject().put("version",1).list("decks",activeGameDeckIds).put("title",activeGameTitle).put("mode",mode.name).put("count",activeCount).put("fingerprint",fingerprint(activeGameDeckIds)).put("progress",progress).toString()
+        quizPrefs.edit().putString("session",raw).apply()
+    }
     var pendingGameSelection by remember {
         mutableStateOf<Pair<Set<Long>, String>?>(null)
     }
@@ -164,6 +183,7 @@ fun QuizGamesScreen(
     val isGameActive = activeGameDeckIds.isNotEmpty() && selectedPlayMode != null
     BackHandler(enabled = isGameActive) {
         onStopSpeaking()
+        savedQuiz=quizPrefs.getString("session",null)
         activeGameDeckIds = emptySet()
         selectedPlayMode = null
     }
@@ -178,16 +198,17 @@ fun QuizGamesScreen(
     }
 
     LaunchedEffect(launchDeckId, launchDeckIds) {
+        val savedScope=runCatching{JSONObject(savedQuiz.orEmpty()).longList("decks").toSet()}.getOrDefault(emptySet())
         if (!launchDeckIds.isNullOrEmpty()) {
             val validIds = launchDeckIds.filterTo(linkedSetOf()) { requestedId ->
                 decks.any { it.id == requestedId } && cards.any { it.deckId == requestedId }
             }
-            if (validIds.isNotEmpty()) {
+            if (validIds.isNotEmpty() && validIds!=savedScope) {
                 pendingGameSelection = validIds to launchTitle.ifBlank { "全部單字卡" }
             }
             onLaunchConsumed()
         } else launchDeckId?.let { requestedId ->
-            if (decks.any { it.id == requestedId } && cards.any { it.deckId == requestedId }) {
+            if (decks.any { it.id == requestedId } && cards.any { it.deckId == requestedId } && setOf(requestedId)!=savedScope) {
                 pendingGameSelection =
                     setOf(requestedId) to (decks.firstOrNull { it.id == requestedId }?.name ?: "測驗")
             }
@@ -207,17 +228,21 @@ fun QuizGamesScreen(
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text("$title・共 ${cards.count { it.deckId in deckIds }} 張")
+                    OutlinedTextField(value=requestedCount,onValueChange={requestedCount=it.filter(Char::isDigit).take(4)},label={Text("自訂題數（1–1000）")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                    Text("實際題數不超過符合題型的單字數；開始新測驗會取代未完成進度。",style=MaterialTheme.typography.bodySmall)
                     val selectedCards = cards.filter { it.deckId in deckIds }
                     QuizPlayMode.entries.forEach { mode ->
                         val eligibleCount = eligibleCardsForMode(mode, selectedCards).size
                         OutlinedButton(
                             onClick = {
                                 activeGameDeckIds = deckIds
+                                activeCount=requestedCount.toIntOrNull()?.coerceIn(1,1000)?:20
+                                resumeProgress=null
                                 activeGameTitle = title
                                 selectedPlayMode = mode
                                 pendingGameSelection = null
                             },
-                            enabled = eligibleCount > 0,
+                            enabled = eligibleCount > 0 && (requestedCount.toIntOrNull() ?: 0) in 1..1000 && (mode != QuizPlayMode.MATCH || (requestedCount.toIntOrNull() ?: 0)>=2),
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surface,
@@ -253,6 +278,7 @@ fun QuizGamesScreen(
                             onClick = {
                                 // Exit midway and save/return to folder selection list
                                 onStopSpeaking()
+                                savedQuiz=quizPrefs.getString("session",null)
                                 activeGameDeckIds = emptySet()
                                 selectedPlayMode = null
                             },
@@ -260,7 +286,7 @@ fun QuizGamesScreen(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                             modifier = Modifier.padding(end = 12.dp).testTag("exit_game_midway_button")
                         ) {
-                            Text("退出", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("儲存並退出", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -286,17 +312,22 @@ fun QuizGamesScreen(
                 } else {
                     when (selectedPlayMode) {
                         QuizPlayMode.MATCH -> DynamicWordMatchingGameView(
-                            cards = deckCards,
+                            cards = deckCards.take(activeCount),
+                            resume = resumeProgress,
+                            onCheckpoint = ::checkpoint,
                             wrongCardsPool = emptyList(),
                             onAddWrongCard = onWrongAnswer
                         )
                         QuizPlayMode.PRONOUNCE_WORD, QuizPlayMode.PRONOUNCE_SENTENCE -> PronunciationQuizView(
-                            cards = eligibleCardsForMode(requireNotNull(selectedPlayMode), deckCards),
+                            cards = eligibleCardsForMode(requireNotNull(selectedPlayMode), deckCards).take(activeCount),
+                            resume = resumeProgress,
+                            onCheckpoint = ::checkpoint,
                             sentenceMode = selectedPlayMode == QuizPlayMode.PRONOUNCE_SENTENCE,
                             onSpeak = onSpeak,
                             onStopSpeaking = onStopSpeaking,
                             onResult = onPronunciationResult,
                             onFinish = {
+                                quizPrefs.edit().remove("session").apply();savedQuiz=null
                                 onStopSpeaking()
                                 activeGameDeckIds = emptySet()
                                 selectedPlayMode = null
@@ -304,11 +335,15 @@ fun QuizGamesScreen(
                         )
                         null -> Unit
                         else -> IndependentQuizView(
+                            questionLimit = activeCount,
+                            resume = resumeProgress,
+                            onCheckpoint = ::checkpoint,
                             mode = requireNotNull(selectedPlayMode),
                             cards = deckCards,
                             onWrongAnswer = onWrongAnswer,
                             onSpeak = onSpeak,
                             onFinish = {
+                                quizPrefs.edit().remove("session").apply();savedQuiz=null
                                 onStopSpeaking()
                                 activeGameDeckIds = emptySet()
                                 selectedPlayMode = null
@@ -352,6 +387,20 @@ fun QuizGamesScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            savedQuiz?.let { raw ->
+                item {
+                    val draft=runCatching{JSONObject(raw)}.getOrNull()
+                    val ids=draft?.longList("decks")?.toSet().orEmpty()
+                    val mode=runCatching{QuizPlayMode.valueOf(draft?.optString("mode").orEmpty())}.getOrNull()
+                    val valid=draft?.optInt("version")==1&&mode!=null&&ids.isNotEmpty()&&draft.optInt("fingerprint")==fingerprint(ids)&&ids.all{id->decks.any{it.id==id}}
+                    Text("未完成測驗：${draft?.optString("title").orEmpty()}",fontWeight=FontWeight.Bold)
+                    if(!valid)Text("教材已變更或進度無法讀取，請重新開始。",style=MaterialTheme.typography.bodySmall)
+                    Row {
+                        Button(enabled=valid,onClick={if(draft!=null&&mode!=null){activeGameDeckIds=ids;activeGameTitle=draft.optString("title");activeCount=draft.optInt("count",20).coerceIn(1,1000);resumeProgress=draft.optJSONObject("progress");selectedPlayMode=mode}}){Text("接續上次")}
+                        TextButton(onClick={quizPrefs.edit().remove("session").apply();savedQuiz=null}){Text("清除進度")}
+                    }
+                }
+            }
             if (decks.isEmpty()) {
                 item {
                     CalmEmptyState(
@@ -481,6 +530,8 @@ private fun nearMeaningCards(card: Flashcard, cards: List<Flashcard>): List<Flas
 @Composable
 private fun PronunciationQuizView(
     cards: List<Flashcard>,
+    resume:JSONObject? = null,
+    onCheckpoint:(JSONObject)->Unit = {},
     sentenceMode: Boolean,
     onSpeak: (String) -> Unit,
     onStopSpeaking: () -> Unit,
@@ -492,13 +543,14 @@ private fun PronunciationQuizView(
         return
     }
     val context = LocalContext.current
-    var index by remember { mutableIntStateOf(0) }
+    var index by remember { mutableIntStateOf(resume?.optInt("index")?:0) }
     var listening by remember(index) { mutableStateOf(false) }
-    var recognized by remember(index) { mutableStateOf("") }
-    var score by remember(index) { mutableStateOf<Int?>(null) }
+    var recognized by remember(index) { mutableStateOf(if(resume!=null&&index==resume.optInt("index"))resume.optString("recognized") else "") }
+    var score by remember(index) { mutableStateOf<Int?>(if(resume!=null&&index==resume.optInt("index")&&resume.has("score"))resume.optInt("score") else null) }
     var feedback by remember(index) { mutableStateOf("先聽一次示範，再按錄音開始作答。") }
     val card = cards[index.coerceIn(0, cards.lastIndex)]
     val target = if (sentenceMode) card.exampleSentence.trim() else card.word.trim()
+    SideEffect{onCheckpoint(JSONObject().put("index",index).put("recognized",recognized).put("score",score))}
     val recognizer = remember(context, index) {
         if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
     }
@@ -719,6 +771,9 @@ private fun choiceOptions(
 private fun IndependentQuizView(
     mode: QuizPlayMode,
     cards: List<Flashcard>,
+    questionLimit:Int = 20,
+    resume:JSONObject? = null,
+    onCheckpoint:(JSONObject)->Unit = {},
     onWrongAnswer: (Flashcard) -> Unit,
     onSpeak: (String) -> Unit,
     onFinish: () -> Unit
@@ -728,21 +783,26 @@ private fun IndependentQuizView(
     // that update rebuild and reshuffle the list, which looked like an automatic skip.
     val questionSetIds = cards.map { it.id }.sorted()
     val initialEligible = remember(mode, questionSetIds) {
-        eligibleCardsForMode(mode, cards).shuffled()
+        eligibleCardsForMode(mode, cards).shuffled().take(questionLimit)
     }
-    var roundIds by remember(mode, questionSetIds) { mutableStateOf(initialEligible.map { it.id }) }
+    var roundIds by remember(mode, questionSetIds) { mutableStateOf(resume?.longList("round")?.takeIf{it.isNotEmpty()}?:initialEligible.map { it.id }) }
     val eligible = roundIds.mapNotNull { id -> cards.firstOrNull { it.id == id } }
-    var questionIndex by remember(mode, roundIds) { mutableIntStateOf(0) }
-    var correctCount by remember(mode, roundIds) { mutableIntStateOf(0) }
-    var wrongCardIds by remember(mode, questionSetIds) { mutableStateOf<Set<Long>>(emptySet()) }
-    var selectedOption by remember(mode, questionIndex) { mutableStateOf<String?>(null) }
-    var typedAnswer by remember(mode, questionIndex) { mutableStateOf("") }
-    var answerResult by remember(mode, questionIndex) { mutableStateOf<Boolean?>(null) }
-    var wrongReported by remember(mode, questionIndex) { mutableStateOf(false) }
-    var selectedTokenIndices by remember(mode, questionIndex) { mutableStateOf<List<Int>>(emptyList()) }
+    var restoredOnce by remember { mutableStateOf(false) }
+    val restoring=resume?.takeIf{!restoredOnce}
+    var questionIndex by remember(mode, roundIds) { mutableIntStateOf(restoring?.optInt("index")?:0) }
+    var correctCount by remember(mode, roundIds) { mutableIntStateOf(restoring?.optInt("correct")?:0) }
+    var wrongCardIds by remember(mode, questionSetIds) { mutableStateOf<Set<Long>>(restoring?.longList("wrong")?.toSet()?:emptySet()) }
+    var selectedOption by remember(mode, questionIndex) { mutableStateOf<String?>(restoring?.optString("selected")?.takeIf{it.isNotBlank()}) }
+    var typedAnswer by remember(mode, questionIndex) { mutableStateOf(restoring?.optString("typed")?:"") }
+    var answerResult by remember(mode, questionIndex) { mutableStateOf<Boolean?>(if(restoring?.has("result")==true)restoring.optBoolean("result") else null) }
+    var wrongReported by remember(mode, questionIndex) { mutableStateOf(restoring?.optBoolean("reported")?:false) }
+    var selectedTokenIndices by remember(mode, questionIndex) { mutableStateOf<List<Int>>(restoring?.intList("tokens")?:emptyList()) }
     var canAdvance by remember(mode, questionIndex) { mutableStateOf(false) }
     val answerFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val progress=JSONObject().list("round",roundIds).put("index",questionIndex).put("correct",correctCount).list("wrong",wrongCardIds).put("selected",selectedOption).put("typed",typedAnswer).put("result",answerResult).put("reported",wrongReported).list("tokens",selectedTokenIndices).put("complete",questionIndex>=eligible.size)
+    SideEffect{onCheckpoint(progress)}
+    LaunchedEffect(Unit){restoredOnce=true}
 
     val isTypingMode = mode in setOf(
         QuizPlayMode.CHINESE_TYPE_ENGLISH,
@@ -836,18 +896,20 @@ private fun IndependentQuizView(
         QuizPlayMode.SYNONYM_DISCRIMINATION
     )
     val options = remember(mode, card.id, cards.map { it.id }) {
-        if (isChoice) choiceOptions(mode, card, cards) else emptyList()
+        restoring?.stringList("options")?.takeIf{it.isNotEmpty()} ?: if (isChoice) choiceOptions(mode, card, cards) else emptyList()
     }
     val sentenceTokens = remember(card.id) {
         card.exampleSentence.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
     }
     val shuffledTokenIndices = remember(card.id) {
         val normal = sentenceTokens.indices.toList()
-        normal.shuffled().let { shuffled ->
+        restoring?.intList("bank")?.takeIf{it.size==normal.size} ?: normal.shuffled().let { shuffled ->
             if (shuffled == normal && shuffled.size > 1) shuffled.drop(1) + shuffled.first()
             else shuffled
         }
     }
+
+    SideEffect{onCheckpoint(progress.list("options",options).list("bank",shuffledTokenIndices))}
 
     LaunchedEffect(card.id, isListening) {
         if (isListening) onSpeak(card.word)
@@ -1783,6 +1845,8 @@ private fun SpellingQuizView(
 @Composable
 private fun DynamicWordMatchingGameView(
     cards: List<Flashcard>,
+    resume:JSONObject? = null,
+    onCheckpoint:(JSONObject)->Unit = {},
     wrongCardsPool: List<Flashcard>,
     onAddWrongCard: (Flashcard) -> Unit
 ) {
@@ -1822,34 +1886,35 @@ private fun DynamicWordMatchingGameView(
         val prioritized = eligibleCards.shuffled().sortedByDescending {
             it.id in wrongIds || it.mistakeCount > 0
         }
-        ArrayList(prioritized.map { it.id })
+        ArrayList(resume?.longList("initial")?.takeIf{it.isNotEmpty()}?:prioritized.map { it.id })
     }
     val initialLeftIds = initialOrder.take(4)
     val initialRightOrder = rememberSaveable(cardSetKey) {
-        ArrayList(buildInitialRightIds(initialOrder, initialLeftIds))
+        ArrayList(resume?.longList("initialRight")?:buildInitialRightIds(initialOrder, initialLeftIds))
     }
 
     var leftSlots by rememberSaveable(cardSetKey) {
-        mutableStateOf(paddedSlots(initialLeftIds))
+        mutableStateOf(resume?.let{ArrayList(it.longList("leftSlots"))}?:paddedSlots(initialLeftIds))
     }
     var rightSlots by rememberSaveable(cardSetKey) {
-        mutableStateOf(paddedSlots(initialRightOrder))
+        mutableStateOf(resume?.let{ArrayList(it.longList("rightSlots"))}?:paddedSlots(initialRightOrder))
     }
     var leftQueue by rememberSaveable(cardSetKey) {
-        mutableStateOf(ArrayList(initialOrder.filterNot { it in initialLeftIds }))
+        mutableStateOf(ArrayList(resume?.longList("leftQueue")?:initialOrder.filterNot { it in initialLeftIds }))
     }
     var rightQueue by rememberSaveable(cardSetKey) {
-        mutableStateOf(ArrayList(initialOrder.filterNot { it in initialRightOrder }))
+        mutableStateOf(ArrayList(resume?.longList("rightQueue")?:initialOrder.filterNot { it in initialRightOrder }))
     }
-    var matchedCount by rememberSaveable(cardSetKey) { mutableIntStateOf(0) }
-    var wrongAttempts by rememberSaveable(cardSetKey) { mutableIntStateOf(0) }
-    var startedAt by rememberSaveable(cardSetKey) { mutableStateOf(System.currentTimeMillis()) }
+    var matchedCount by rememberSaveable(cardSetKey) { mutableIntStateOf(resume?.optInt("matched")?:0) }
+    var wrongAttempts by rememberSaveable(cardSetKey) { mutableIntStateOf(resume?.optInt("mistakes")?:0) }
+    var startedAt by rememberSaveable(cardSetKey) { mutableStateOf(System.currentTimeMillis()-(resume?.optLong("elapsed")?:0)) }
     var selectedWordId by rememberSaveable(cardSetKey) { mutableStateOf<Long?>(null) }
     var selectedDefinitionId by rememberSaveable(cardSetKey) { mutableStateOf<Long?>(null) }
     var wrongWordId by rememberSaveable(cardSetKey) { mutableStateOf<Long?>(null) }
     var wrongDefinitionId by rememberSaveable(cardSetKey) { mutableStateOf<Long?>(null) }
     var wrongFeedbackVersion by rememberSaveable(cardSetKey) { mutableIntStateOf(0) }
     val totalCount = eligibleCards.size
+    SideEffect{onCheckpoint(JSONObject().list("initial",initialOrder).list("initialRight",initialRightOrder).list("leftSlots",leftSlots).list("rightSlots",rightSlots).list("leftQueue",leftQueue).list("rightQueue",rightQueue).put("matched",matchedCount).put("mistakes",wrongAttempts).put("elapsed",System.currentTimeMillis()-startedAt).put("complete",matchedCount>=totalCount))}
 
     fun boardHasMatch(left: List<Long>, right: List<Long>): Boolean =
         left.any { wordId -> right.any { definitionId -> areCompatible(wordId, definitionId) } }

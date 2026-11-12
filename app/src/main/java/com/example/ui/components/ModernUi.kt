@@ -26,29 +26,29 @@ import androidx.compose.ui.draw.clip
 
 @Composable
 fun ModernButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp), colors: ButtonColors = ButtonDefaults.buttonColors(),
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(20.dp), colors: ButtonColors = ButtonDefaults.buttonColors(),
     elevation: ButtonElevation? = null, border: androidx.compose.foundation.BorderStroke? = null,
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding, interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit) {
-    Button(onClick, modifier.heightIn(min = 48.dp), enabled, RoundedCornerShape(16.dp), colors, null, border, contentPadding, interactionSource, content)
+    Button(onClick, modifier.heightIn(min = 48.dp), enabled, RoundedCornerShape(20.dp), colors, null, border, contentPadding, interactionSource, content)
 }
 
 @Composable
 fun ModernOutlinedButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp), colors: ButtonColors = ButtonDefaults.outlinedButtonColors(),
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(20.dp), colors: ButtonColors = ButtonDefaults.outlinedButtonColors(),
     elevation: ButtonElevation? = null, border: androidx.compose.foundation.BorderStroke? = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding, interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit) {
-    OutlinedButton(onClick, modifier.heightIn(min = 48.dp), enabled, RoundedCornerShape(16.dp), colors, null, border, contentPadding, interactionSource, content)
+    OutlinedButton(onClick, modifier.heightIn(min = 48.dp), enabled, RoundedCornerShape(20.dp), colors, null, border, contentPadding, interactionSource, content)
 }
 
 @Composable
 fun ModernTonalButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp), colors: ButtonColors = ButtonDefaults.filledTonalButtonColors(),
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(20.dp), colors: ButtonColors = ButtonDefaults.filledTonalButtonColors(),
     elevation: ButtonElevation? = null, border: androidx.compose.foundation.BorderStroke? = null,
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding, interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit) {
-    FilledTonalButton(onClick, modifier.heightIn(min = 48.dp), enabled, RoundedCornerShape(16.dp), colors, null, border, contentPadding, interactionSource, content)
+    FilledTonalButton(onClick, modifier.heightIn(min = 48.dp), enabled, RoundedCornerShape(20.dp), colors, null, border, contentPadding, interactionSource, content)
 }
 
 @Composable
@@ -88,13 +88,13 @@ fun ModernTabRow(
 @Composable
 fun ModernCard(
     modifier: Modifier = Modifier,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(20.dp),
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
     colors: CardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     elevation: CardElevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     border: androidx.compose.foundation.BorderStroke? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(modifier = modifier, shape = RoundedCornerShape(20.dp), colors = colors, elevation = CardDefaults.cardElevation(defaultElevation = 0.dp), border = border, content = content)
+    Card(modifier = modifier, shape = RoundedCornerShape(24.dp), colors = colors, elevation = CardDefaults.cardElevation(defaultElevation = 0.dp), border = border, content = content)
 }
 
 @Composable
@@ -102,14 +102,14 @@ fun ModernCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(20.dp),
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
     colors: CardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     elevation: CardElevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     border: androidx.compose.foundation.BorderStroke? = null,
     interactionSource: MutableInteractionSource? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(onClick = onClick, modifier = modifier, enabled = enabled, shape = RoundedCornerShape(20.dp), colors = colors, elevation = CardDefaults.cardElevation(defaultElevation = 0.dp), border = border, interactionSource = interactionSource, content = content)
+    Card(onClick = onClick, modifier = modifier, enabled = enabled, shape = RoundedCornerShape(24.dp), colors = colors, elevation = CardDefaults.cardElevation(defaultElevation = 0.dp), border = border, interactionSource = interactionSource, content = content)
 }
 
 @Composable
@@ -182,7 +182,7 @@ fun ModernCollectionRow(
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if(subtitle.isNotBlank())Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(buildString { append("$count ${if (grammar) "個文法" else "張單字"}"); due?.let { append(" · 待複習 $it") } }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             progress?.let {

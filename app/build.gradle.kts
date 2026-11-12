@@ -25,8 +25,8 @@ android {
     applicationId = "com.aistudio.vocabpulse.srsapp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 34
-    versionName = "3.2.1"
+    versionCode = 35
+    versionName = "3.3.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "BACKEND_BASE_URL", "\"${backendBaseUrl.trimEnd('/')}\"")
@@ -75,6 +75,7 @@ ksp {
 }
 
 dependencies {
+    implementation("com.google.zxing:core:3.5.3")
   coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")
   implementation(platform(libs.androidx.compose.bom))
   implementation(libs.androidx.activity.compose)
