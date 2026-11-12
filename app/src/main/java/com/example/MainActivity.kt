@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
                     isAppearanceLightNavigationBars = !darkTheme
                 }
             }
-            MyApplicationTheme(darkTheme = darkTheme) {
+            MyApplicationTheme(darkTheme = darkTheme, bluePalette = settings.themeColorPreset) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()

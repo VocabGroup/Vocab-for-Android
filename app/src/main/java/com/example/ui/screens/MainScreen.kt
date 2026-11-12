@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.luminance
 import com.example.ui.components.glassRim
+import com.example.ui.components.LiquidDock
+import com.example.ui.components.LiquidDockTab
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -184,9 +187,6 @@ fun MainScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = onOpenWordSearch) {
-                            Icon(Icons.Default.Search, contentDescription = if (grammarMode) "搜尋文法" else "搜尋英文單字")
-                        }
                         IconButton(onClick = onOpenAssistant) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
@@ -261,86 +261,17 @@ fun MainScreen(
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Box(
-                    Modifier.fillMaxWidth()
-                        .shadow(14.dp, RoundedCornerShape(34.dp), ambientColor = Color.Black.copy(alpha = .14f), spotColor = Color.Black.copy(alpha = .2f))
-                        .clip(RoundedCornerShape(34.dp))
-                        .glassRim(RoundedCornerShape(34.dp))
-                        .testTag("glass_navigation")
-                        .onGloballyPositioned { barPosition = it.positionInRoot() }
-                ) {
-                Canvas(
-                    Modifier.matchParentSize().graphicsLayer {
-                        if (android.os.Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(32f, 32f)
-                    }
-                ) {
-                    val delta = pagePosition - barPosition
-                    with(drawContext.canvas) {
-                        save()
-                        translate(delta.x, delta.y)
-                        drawLayer(pageLayer)
-                        restore()
-                    }
-                }
-                Surface(
-                    shape = RoundedCornerShape(34.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = if (android.os.Build.VERSION.SDK_INT < 31) .94f else if (MaterialTheme.colorScheme.surface.luminance() < .5f) .38f else .26f),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    BoxWithConstraints(Modifier.fillMaxWidth().height(64.dp).padding(5.dp)) {
-                    val tabWidth = maxWidth / tabs.size
-                    val indicatorX by animateDpAsState(tabWidth * selectedNavigation, spring(dampingRatio = .85f, stiffness = 450f), label = "glass_selection")
-                    Box(Modifier.offset(x = indicatorX).width(tabWidth).height(54.dp)
-                        .shadow(2.dp, RoundedCornerShape(28.dp), ambientColor = Color.Black.copy(alpha = .08f), spotColor = Color.Black.copy(alpha = .12f))
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = .36f))
-                        .glassRim(RoundedCornerShape(28.dp)))
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        tabs.forEachIndexed { index, tab ->
-                            val selected = selectedNavigation == index
-                            Surface(
-                                onClick = { if(index == 3) onOpenAssistant() else onTabSelected(index) },
-                                shape = RoundedCornerShape(28.dp),
-                                color = Color.Transparent,
-                                contentColor = if (selected) {
-                                    MaterialTheme.colorScheme.onSurface
-                                } else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxSize()
-                                    .testTag(tab.testTag)
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        imageVector = tab.icon,
-                                        contentDescription = tab.contentDescription,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    if (showNavigationLabels) {
-                                        Spacer(Modifier.height(2.dp))
-                                        Text(
-                                            tab.label,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    }
-                }
-                }
+                LiquidDock(
+                    tabs = tabs.map { LiquidDockTab(it.label, it.icon, it.testTag) },
+                    selectedIndex = selectedNavigation,
+                    onSelect = { if (it == 3) onOpenAssistant() else onTabSelected(it) },
+                    onSearch = onOpenWordSearch,
+                    searchLabel = if (grammarMode) "搜尋文法" else "搜尋英文單字",
+                    showLabels = showNavigationLabels,
+                    pageLayer = pageLayer,
+                    pagePosition = pagePosition,
+                    modifier = Modifier.widthIn(max = 476.dp).fillMaxWidth()
+                )
             }
         }
 

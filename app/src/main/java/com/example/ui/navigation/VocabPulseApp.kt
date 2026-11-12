@@ -936,6 +936,7 @@ fun VocabApp(
                 onIntChange = viewModel::updateIntSetting,
                 onReminderTimesChange = viewModel::updateReminderTimes,
                 onThemeChange = viewModel::updateThemeMode,
+                onBluePaletteChange = viewModel::updateThemeColorPreset,
                 onSpeechRateChange = viewModel::updateSpeechRate,
                 onDictionarySourceChange = viewModel::updateDictionarySource,
                 ttsVoices = ttsVoices,

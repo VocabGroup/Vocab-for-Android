@@ -1660,6 +1660,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             runCatching {
                 repository.clearAllData()
+                com.example.data.settings.CourseCoverStore(getApplication()).clear()
                 db.grammarQuestionDao().deleteAllQuestions()
                 db.grammarQuestionDao().deleteAllWeaknesses()
                 db.grammarContentDao().deleteAllExamples()

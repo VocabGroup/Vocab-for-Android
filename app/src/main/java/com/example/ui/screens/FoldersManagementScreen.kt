@@ -1,6 +1,11 @@
 package com.example.ui.screens
 import com.example.ui.components.ModernCollectionRow
 import com.example.ui.components.FolderSharingPanel
+import com.example.ui.components.CourseBook
+import com.example.ui.components.CourseCoverDialog
+import com.example.data.settings.CourseCoverStore
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.BackHandler
 import com.example.data.importer.SharedFolder
 
 import androidx.compose.foundation.background
@@ -119,7 +124,13 @@ fun FoldersManagementScreen(
     }
     var selectedCourseFilter by remember { mutableStateOf<String?>(null) }
 
-    var expandedCourses by rememberSaveable { mutableStateOf(listOf<String>()) }
+    var showAllFolders by rememberSaveable { mutableStateOf(false) }
+    val coverContext = LocalContext.current
+    val coverStore = remember(coverContext) { CourseCoverStore(coverContext) }
+    var coverCourse by remember { mutableStateOf<String?>(null) }
+    var coverRevision by remember { mutableStateOf(0) }
+    BackHandler(enabled = selectedCourseFilter != null || showAllFolders) { selectedCourseFilter = null; showAllFolders = false }
+    coverCourse?.let { course -> CourseCoverDialog(course, coverStore, { coverCourse = null }, { coverRevision++; coverCourse = null }) }
     var shareCourse by remember { mutableStateOf<String?>(null) }
     val filteredDecks = decks
     val sourceDeckIds = filteredDecks.map { it.id }
@@ -221,7 +232,7 @@ fun FoldersManagementScreen(
                     onClick = {
                         val newName = renamedCourseValue.trim()
                         onRenameCourse(originalName, newName) { success ->
-                            if (success) { selectedCourseFilter = newName; expandedCourses=expandedCourses.map{if(it==originalName)newName else it} }
+                            if (success) { coverStore.rename(originalName, newName); coverRevision++; selectedCourseFilter = newName }
                             courseToRename = null
                         }
                     },
@@ -284,9 +295,13 @@ fun FoldersManagementScreen(
         ) {
             item {
                 if(scanUndoCount>0)TextButton(onClick={confirmUndoScan=true}){Text("撤回上次單字匯入（$scanUndoCount 字）")}
-                Text("我的課程", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(selectedCourseFilter ?: if (showAllFolders) "全部資料夾" else "我的課程", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(top = 12.dp))
+                    if (selectedCourseFilter != null || showAllFolders) TextButton(onClick = { selectedCourseFilter = null; showAllFolders = false }) { Text("返回課程") }
+                    else TextButton(onClick = { showAllFolders = true }) { Text("全部資料夾") }
+                }
                 TextButton(onClick={importLinkRequested=true}) { Text("匯入分享網址") }
-                Text("展開課程即可開啟教材；長按把手可在同課程排序。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (selectedCourseFilter != null || showAllFolders) Text("長按把手可在同課程排序。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             if (displayedDecks.isEmpty()) {
@@ -298,27 +313,29 @@ fun FoldersManagementScreen(
                     )
                 }
             } else {
-                courses.forEach { course ->
-                    item(key = "course:$course") {
-                        Surface(onClick = {
-                            selectedCourseFilter = course
-                            expandedCourses = if (course in expandedCourses) expandedCourses - course else expandedCourses + course
-                        }, shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth().testTag("course_$course")) {
-                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(course, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text("${decks.count { it.category == course }} 個資料夾", style = MaterialTheme.typography.bodySmall)
-                                }
-                                Icon(if (course in expandedCourses) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, if (course in expandedCourses) "收合課程" else "展開課程")
-                            }
+                if (selectedCourseFilter == null && !showAllFolders) items(courses.chunked(2), key = { it.joinToString("|") }) { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        row.forEach { course ->
+                            val courseDecks = decks.filter { it.category == course }
+                            val count = allCards.count { card -> courseDecks.any { it.id == card.deckId } }
+                            val cover = remember(course, coverRevision) { coverStore.value(course) }
+                            CourseBook(course, "${courseDecks.size} 個資料夾 · $count 字", cover, coverStore,
+                                onOpen = { selectedCourseFilter = course }, onCover = { coverCourse = course }, modifier = Modifier.weight(1f))
                         }
-                        if (course in expandedCourses) Row {
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+                courses.filter { showAllFolders || it == selectedCourseFilter }.forEach { course ->
+                    item(key = "course:$course") {
+                        if (showAllFolders) Text(course, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Row {
                             TextButton(onClick = { shareCourse = course }) { Text("分享課程") }
                             TextButton(onClick = { selectedCourseFilter = course; showAddMenu = true }) { Text("新增教材") }
+                            IconButton(onClick = { coverCourse = course }) { Icon(Icons.Default.Edit, "自訂課程封面") }
                             IconButton(onClick = { renamedCourseValue = course; courseToRename = course }) { Icon(Icons.Default.Edit, "重新命名課程") }
                         }
                     }
-                    if (course in expandedCourses) itemsIndexed(displayedDecks.filter { it.category == course }, key = { _, deck -> deck.id }) { _, deck ->
+                    itemsIndexed(displayedDecks.filter { it.category == course }, key = { _, deck -> deck.id }) { _, deck ->
                     val deckCards = allCards.filter { it.deckId == deck.id }
                     val totalCardCount = deckCards.size
                     val masteredCount = deckCards.count { it.isMastered }

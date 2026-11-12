@@ -366,7 +366,7 @@ fun FlipCard(
                     .padding(16.dp)
             ) {
                 Text(
-                    text = "不熟",
+                    text = "沒記住",
                     color = MaterialTheme.colorScheme.onError,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)

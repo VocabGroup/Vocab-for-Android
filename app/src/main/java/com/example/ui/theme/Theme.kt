@@ -63,10 +63,28 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun MyApplicationTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    bluePalette: String = "SKY",
     content: @Composable () -> Unit
 ) {
+    val primary = when (bluePalette) {
+        "ICE" -> if (darkTheme) Color(0xFF91D1E3) else Color(0xFF246C87)
+        "CORNFLOWER" -> if (darkTheme) Color(0xFFB4C5FF) else Color(0xFF4B65B0)
+        else -> if (darkTheme) Color(0xFF9BCDF6) else Color(0xFF286CA5)
+    }
+    val container = when (bluePalette) {
+        "ICE" -> Color(0xFFCCE8EF)
+        "CORNFLOWER" -> Color(0xFFDBE3FB)
+        else -> Color(0xFFD1E6F7)
+    }
+    val colors = if (darkTheme) DarkColors.copy(primary = primary, onPrimary = Color(0xFF102C45)) else LightColors.copy(
+        primary = primary, primaryContainer = container, onPrimaryContainer = Color(0xFF19354D),
+        background = when (bluePalette) { "ICE" -> Color(0xFFF1F9FA); "CORNFLOWER" -> Color(0xFFF4F6FD); else -> Color(0xFFF1F7FC) },
+        onBackground = Color(0xFF19354D), onSurface = Color(0xFF19354D),
+        surfaceContainerLow = Color(0xFFF5F9FD), surfaceContainer = Color(0xFFE5EFF8),
+        surfaceVariant = Color(0xFFE5EFF8), onSurfaceVariant = Color(0xFF526F87)
+    )
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = colors,
         typography = Typography,
         shapes = AppShapes,
         content = content

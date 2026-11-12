@@ -100,6 +100,7 @@ fun SettingsScreen(
     onIntChange: (String, Int) -> Unit,
     onReminderTimesChange: (List<ReminderTime>) -> Unit,
     onThemeChange: (String) -> Unit,
+    onBluePaletteChange: (String) -> Unit = {},
     onSpeechRateChange: (Float) -> Unit,
     onDictionarySourceChange: (String) -> Unit,
     ttsVoices: List<TtsVoiceOption>,
@@ -394,6 +395,12 @@ fun SettingsScreen(
                         }
                     }
                     Text("畫面與文字顏色隨主題統一調整。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("淺藍配色", style = MaterialTheme.typography.titleSmall)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("SKY" to "晴空藍", "ICE" to "冰川藍", "CORNFLOWER" to "矢車菊藍").forEach { (value, label) ->
+                            FilterChip(selected = settings.themeColorPreset == value || value == "SKY" && settings.themeColorPreset !in listOf("ICE", "CORNFLOWER"), onClick = { onBluePaletteChange(value) }, label = { Text(label) })
+                        }
+                    }
                 }
             }
             if (settingsPage == "學習") item {
