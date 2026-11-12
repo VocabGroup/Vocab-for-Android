@@ -38,9 +38,9 @@ fun FolderSharingPanel(decks:List<Deck>,cards:List<Flashcard>,course:String?,req
     var mode by remember{mutableStateOf("")};var selected by remember{mutableStateOf(setOf<Long>())};var includeNotes by remember{mutableStateOf(false)}
     var incoming by remember{mutableStateOf<List<SharedFolder>>(emptyList())};var checked by remember{mutableStateOf(setOf<Int>())};var target by remember{mutableStateOf("")};var skip by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var message by remember{mutableStateOf("")};var undo by remember{mutableStateOf<List<Long>>(emptyList())};var confirmUndo by remember{mutableStateOf(false)}
     LaunchedEffect(externalUndoIds){undo=externalUndoIds}
-    val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null)scope.launch{busy=true;runCatching{withContext(Dispatchers.IO){context.contentResolver.openInputStream(uri)!!.use{stream->val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192);var total=0;while(true){val n=stream.read(buffer);if(n<0)break;total+=n;require(total<=20*1024*1024){"分享檔超過 20 MB"};out.write(buffer,0,n)};FolderShare.parse(out.toString("UTF-8"))}}}.onSuccess{incoming=it;checked=it.indices.toSet();target=course.orEmpty();mode="import"}.onFailure{message=it.message.orEmpty()};busy=false}}
+    val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null)scope.launch{busy=true;runCatching{withContext(Dispatchers.IO){context.contentResolver.openInputStream(uri)!!.use{stream->val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192);var total=0;while(true){val n=stream.read(buffer);if(n<0)break;total+=n;require(total<=20*1024*1024){"分享檔超過 20 MB"};out.write(buffer,0,n)};FolderShare.parse(out.toString("UTF-8"))}}}.onSuccess{message="";incoming=it;checked=it.indices.toSet();target=course.orEmpty();mode="import"}.onFailure{message=it.message.orEmpty()};busy=false}}
     LaunchedEffect(requestDeckId){if(requestDeckId!=null){selected=setOf(requestDeckId);includeNotes=false;message="";mode="export";onRequestHandled()}}
-    LaunchedEffect(requestCourse){if(requestCourse!=null){selected=decks.filter{it.category==requestCourse}.map{it.id}.toSet();includeNotes=false;mode="export";onCourseRequestHandled()}}
+    LaunchedEffect(requestCourse){if(requestCourse!=null){selected=decks.filter{it.category==requestCourse}.map{it.id}.toSet();includeNotes=false;message="";mode="export";onCourseRequestHandled()}}
     LaunchedEffect(importRequested){if(importRequested){picker.launch(arrayOf("application/json","text/plain","application/octet-stream"));onImportRequestHandled()}}
     Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
         if(showActions)Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedButton(enabled=!busy,onClick={selected=emptySet();mode="export"}){Text("選取／分享")};OutlinedButton(enabled=!busy,onClick={picker.launch(arrayOf("application/json","text/plain","application/octet-stream"))}){Text("匯入分享檔案")}}
@@ -49,7 +49,7 @@ fun FolderSharingPanel(decks:List<Deck>,cards:List<Flashcard>,course:String?,req
         if(message.isNotBlank())Text(message,style=MaterialTheme.typography.bodySmall)
     }
     if(confirmUndo)AlertDialog(onDismissRequest={if(!busy)confirmUndo=false},title={Text("撤回這次匯入？")},text={Text("僅移除這批新資料夾及之後的修改；原本資料不受影響。")},confirmButton={TextButton(enabled=!busy,onClick={scope.launch{busy=true;onUndo(undo).onSuccess{undo=emptyList();confirmUndo=false;message="已撤回匯入"}.onFailure{message=it.message.orEmpty()};busy=false}}){Text("撤回")}},dismissButton={TextButton(onClick={confirmUndo=false}){Text("取消")}})
-    if(mode.isNotEmpty())AlertDialog(onDismissRequest={if(!busy)mode=""},title={Text(if(mode=="export")"分享資料夾" else "匯入分享資料夾")},text={Column(Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
+    if(mode.isNotEmpty())AlertDialog(onDismissRequest={if(!busy)mode=""},title={Text(if(mode=="export")"分享資料夾" else "匯入分享資料夾")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){if(message.isNotBlank())Text(message,color=MaterialTheme.colorScheme.error);Column(Modifier.heightIn(max=420.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
         if(mode=="export"){
             Text("只分享內容，不包含學習狀態、API Key 或聊天紀錄。")
             Text("已選 ${selected.size} 個資料夾 · ${cards.count{it.deckId in selected}} 個單字")
@@ -66,7 +66,7 @@ fun FolderSharingPanel(decks:List<Deck>,cards:List<Flashcard>,course:String?,req
             Row{Checkbox(checked=skip,onCheckedChange={skip=it});Text("略過詞庫已有單字（否則加入新資料夾）")}
             incoming.forEachIndexed{index,deck->Row{Checkbox(checked=index in checked,onCheckedChange={checked=if(it)checked+index else checked-index});Text("${deck.course} · ${deck.name}：${deck.cards.size} 字，已有 ${deck.cards.count{c->cards.any{it.normalizedWord==c.normalizedWord}}} 字")};deck.cards.take(40).forEach{Text("${it.word} — ${it.definition}\n${it.exampleSentence}",style=MaterialTheme.typography.bodySmall)}}
         }
-    }},confirmButton={TextButton(enabled=!busy&&(if(mode=="export")selected.isNotEmpty() else checked.isNotEmpty()),onClick={scope.launch{busy=true;try{if(mode=="export"){
+    }}},confirmButton={TextButton(enabled=!busy&&(if(mode=="export")selected.isNotEmpty() else checked.isNotEmpty()),onClick={scope.launch{busy=true;try{if(mode=="export"){
         val json=withContext(Dispatchers.Default){FolderShare.export(decks.filter{it.id in selected},cards,includeNotes)}
         val file=withContext(Dispatchers.IO){File(context.cacheDir,"Vocab-${System.currentTimeMillis()}.vocab-share.json").apply{writeText(json)}}
         val uri=FileProvider.getUriForFile(context,"${context.packageName}.fileprovider",file)

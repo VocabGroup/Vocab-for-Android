@@ -41,8 +41,8 @@ class LibraryUxTest {
   compose.onNodeWithText("已選 2 個資料夾 · 0 個單字").assertIsDisplayed()
  }
  @Test fun fileImportOpensPreviewEvenAfterHeaderIsScrolledAway(){
-  val decks=(1..30).map{Deck(id=it.toLong(),name="資料夾$it",category="日常")};var imports=0
-  compose.setContent{MyApplicationTheme{FoldersManagementScreen(decks,emptyList(),{_,_,_,_->},{},{},onOpenCardList={},onJumpToStudy={},onJumpToQuiz={},onImportShare={folders,_,_->imports=folders.size;Result.success(listOf(99L))})}}
+  val decks=(1..30).map{Deck(id=it.toLong(),name="資料夾$it",category="日常")};var imports=0;var attempts=0
+  compose.setContent{MyApplicationTheme{FoldersManagementScreen(decks,emptyList(),{_,_,_,_->},{},{},onOpenCardList={},onJumpToStudy={},onJumpToQuiz={},onImportShare={folders,_,_->attempts++;if(attempts==1)Result.failure(IllegalStateException("儲存失敗（測試）"))else{imports=folders.size;Result.success(listOf(99L))}})}}
   compose.onNodeWithTag("course_日常").performClick()
   compose.onNodeWithTag("folder_list").performScrollToIndex(30)
   compose.onNodeWithTag("add_folder_fab").performClick()
@@ -57,6 +57,9 @@ class LibraryUxTest {
   }
   compose.waitUntil(10000){compose.onAllNodesWithText("確認匯入").fetchSemanticsNodes().isNotEmpty()}
   compose.onNodeWithText("確認匯入").assertIsDisplayed().performClick()
+  compose.waitUntil(10000){attempts==1}
+  compose.onAllNodesWithText("儲存失敗（測試）").onLast().assertIsDisplayed()
+  compose.onNodeWithText("確認匯入").performClick()
   compose.waitUntil(10000){imports==1}
  }
  @Test fun fourTabNavigationRetainsQuizArticlesAndAi(){
