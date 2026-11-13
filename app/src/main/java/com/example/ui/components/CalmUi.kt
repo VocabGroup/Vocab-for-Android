@@ -35,7 +35,7 @@ fun CalmEmptyState(
     Card(
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = androidx.compose.ui.graphics.Color.Transparent
         ),
         modifier = modifier.fillMaxWidth()
     ) {

@@ -124,7 +124,7 @@ fun FlipCard(
                     cameraDistance = 12f * density
                 }
                 .clickable { onFlip() },
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             ),
@@ -179,7 +179,8 @@ fun FlipCard(
                         Text(
                             text = card.word,
                             style = MaterialTheme.typography.headlineLarge.copy(
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.Medium,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
                                 fontSize = if (responsive.isConstrained) 28.sp else 36.sp
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

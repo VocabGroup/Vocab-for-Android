@@ -2,9 +2,12 @@ package com.example.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -26,6 +29,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -42,8 +50,14 @@ fun LiquidDock(
     pageLayer: GraphicsLayer, pagePosition: Offset, modifier: Modifier = Modifier
 ) {
     val lift = remember { Animatable(0f) }
+    var dragPosition by remember { mutableStateOf<Float?>(null) }
+    var settledPosition by remember { mutableFloatStateOf(selectedIndex.toFloat()) }
+    val haptic = LocalHapticFeedback.current
+    val select by rememberUpdatedState(onSelect)
+    var boundary by remember { mutableIntStateOf(selectedIndex) }
     var initialized by remember { mutableStateOf(false) }
     LaunchedEffect(selectedIndex) {
+        settledPosition = selectedIndex.toFloat()
         if (initialized) {
             launch { lift.animateTo(1f, spring(.7f, 700f)); lift.animateTo(0f, spring(.58f, 220f)) }
         }
@@ -53,11 +67,33 @@ fun LiquidDock(
         BoxWithConstraints(Modifier.weight(1f).height(66.dp).testTag("glass_navigation")) {
             GlassBackdrop(Modifier.matchParentSize(), pageLayer, pagePosition)
             val width = (maxWidth - 10.dp) / tabs.size
-            val x by animateDpAsState(width * selectedIndex, spring(.62f, 320f), label = "glass_bubble_position")
-            Box(Modifier.padding(start = 5.dp, top = 5.dp).offset(x = x).width(width).height(56.dp)
-                .graphicsLayer { translationY = -7.dp.toPx() * lift.value; scaleX = 1f + .13f * lift.value; scaleY = 1f + .22f * lift.value }
+            val widthPx = with(LocalDensity.current) { width.toPx() }
+            val position by animateFloatAsState(dragPosition ?: settledPosition, if (dragPosition != null) snap() else spring(.62f, 320f), label = "glass_bubble_position")
+            val raised = if (dragPosition != null) 1f else lift.value
+            Box(Modifier.fillMaxSize().pointerInput(widthPx, selectedIndex) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragPosition = position; boundary = selectedIndex; haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                    onHorizontalDrag = { change, delta ->
+                        change.consume()
+                        val raw = (dragPosition ?: selectedIndex.toFloat()) + delta / widthPx
+                        val end = tabs.lastIndex.toFloat()
+                        dragPosition = when { raw < 0f -> raw * .2f; raw > end -> end + (raw - end) * .2f; else -> raw }
+                        val next = dragPosition!!.roundToInt().coerceIn(0, tabs.lastIndex)
+                        if (next != boundary) { boundary = next; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+                    },
+                    onDragEnd = {
+                        val target = (dragPosition ?: selectedIndex.toFloat()).roundToInt().coerceIn(0, tabs.lastIndex)
+                        settledPosition = target.toFloat(); dragPosition = null; select(target)
+                        // The assistant is a full-screen action; returning reveals the current page.
+                        if (target == tabs.lastIndex) settledPosition = selectedIndex.toFloat()
+                    },
+                    onDragCancel = { dragPosition = null; settledPosition = selectedIndex.toFloat() }
+                )
+            }.testTag("glass_drag_surface")) {
+            Box(Modifier.padding(start = 5.dp, top = 5.dp).offset(x = width * position).width(width).height(56.dp)
+                .graphicsLayer { translationY = -7.dp.toPx() * raised; scaleX = 1f + .13f * raised; scaleY = 1f + .22f * raised }
                 .shadow(6.dp, CircleShape, ambientColor = Color.Black.copy(alpha = .1f), spotColor = Color.Black.copy(alpha = .18f))
-                .clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = .42f)).glassRim(CircleShape))
+                .clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = .42f)).glassRim(CircleShape).testTag("glass_selection_bubble"))
             Row(Modifier.fillMaxSize().padding(5.dp)) {
                 tabs.forEachIndexed { index, tab ->
                     Surface(onClick = { onSelect(index) }, shape = CircleShape, color = Color.Transparent,
@@ -69,6 +105,7 @@ fun LiquidDock(
                         }
                     }
                 }
+            }
             }
         }
         Box(Modifier.size(66.dp)) {

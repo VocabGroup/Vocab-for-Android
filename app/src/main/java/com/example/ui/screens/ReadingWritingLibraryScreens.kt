@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import com.example.ui.components.ModernButton as Button
 import com.example.ui.components.ModernOutlinedButton as OutlinedButton
 import com.example.ui.components.ModernCard as Card
@@ -170,7 +171,7 @@ fun ReadingLibraryScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text("文章閱讀", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            com.example.ui.components.EditorialHeading("文章閱讀", "選擇文章，直接閱讀、查字與練習。")
             Text("把正在讀的文章放在最前面，點文字即可查詢與建立單字卡。", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
@@ -179,7 +180,7 @@ fun ReadingLibraryScreen(
                 OutlinedButton(onClick = { showImport = true }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.FileOpen, null); Text("匯入文章") }
             }
         }
-        item { Text("我的文章", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { com.example.ui.components.CalmSectionHeader("我的文章") }
         if (articleMessages.isEmpty()) item { CalmEmptyState(Icons.Default.Article, "還沒有文章", "可由單字資料夾產生文章，或匯入自己的內容。") }
         itemsIndexed(articleMessages, key = { _, item -> item.id }) { index, message ->
 ModernListRow(articleTitle(message), "${dateText(message.createdAt)} · " + message.content.replace('\n', ' ').take(100), Icons.Default.Article, { onOpenArticle(message) })
@@ -200,8 +201,7 @@ fun WritingLibraryScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text("作文練習", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("保留原稿、修改版本與逐項說明，讓每次修改都能變成弱點練習。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            com.example.ui.components.EditorialHeading("作文練習", "保留原稿、修改版本與逐項說明，讓每次修改都能變成弱點練習。")
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -253,7 +253,7 @@ fun WritingRecordDetailScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .72f))) {
+                Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(record.course, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
@@ -303,11 +303,8 @@ fun WritingRecordDetailScreen(
 
 @Composable
 private fun WritingTextCard(title: String, text: String) {
-    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(text, style = MaterialTheme.typography.bodyLarge)
-        }
+    com.example.ui.components.EditorialReadingPanel(title) {
+        Text(text, style = MaterialTheme.typography.bodyLarge.copy(lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.35f),fontFamily=androidx.compose.ui.text.font.FontFamily.Serif)
     }
 }
 

@@ -51,7 +51,7 @@ import com.example.ui.components.ModernTextField as OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -175,6 +175,7 @@ fun ExternalImportScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
+                com.example.ui.components.EditorialStep(if (candidates.isNotEmpty()) 2 else if (loading) 1 else 0, listOf("選擇來源", "讀取內容", "校對匯入"))
                 Text("儲存到", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 if (decks.isEmpty()) {
                     Text(

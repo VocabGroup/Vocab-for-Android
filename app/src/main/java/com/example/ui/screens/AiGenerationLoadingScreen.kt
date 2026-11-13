@@ -20,7 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,10 +44,10 @@ fun AiGenerationLoadingScreen(
         }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).padding(18.dp), contentAlignment = Alignment.Center) {
-            Surface(Modifier.widthIn(max = 420.dp).fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+            Surface(Modifier.widthIn(max = 420.dp).fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = androidx.compose.ui.graphics.Color.Transparent) {
                 Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     if (error == null) CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 3.dp)
-                    Text(if (error == null) "正在整理內容" else "未能完成", style = MaterialTheme.typography.titleLarge)
+                    com.example.ui.components.EditorialHeading(if (error == null) "正在整理內容" else "未能完成")
                     Text(error ?: status ?: "AI 正在產生內容…", style = MaterialTheme.typography.bodyMedium, color = if (error == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
                     if (error != null) TextButton(onClick = onBack) { Text("返回修改") }
                 }

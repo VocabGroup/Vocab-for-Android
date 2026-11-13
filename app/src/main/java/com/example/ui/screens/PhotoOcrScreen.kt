@@ -53,7 +53,7 @@ import com.example.ui.components.ModernOutlinedButton as OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -390,6 +390,7 @@ fun PhotoOcrScreen(
                 .padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            com.example.ui.components.EditorialStep(if (localCandidates.isNotEmpty()) 2 else if (isOcrScanning) 1 else 0, listOf("加入圖片", "辨識範圍", "校對匯入"))
             if (decks.isEmpty()) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),

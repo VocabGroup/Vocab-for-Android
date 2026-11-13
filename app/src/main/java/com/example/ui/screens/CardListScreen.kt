@@ -66,7 +66,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -799,12 +799,12 @@ private fun CardListItem(
     dragHandleModifier: Modifier = Modifier
 ) {
     var menu by remember { mutableStateOf(false) }
-    Surface(shape = RoundedCornerShape(20.dp), color = if (isSelected || highlighted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth().clickable(enabled = isMultiSelectMode, onClick = onToggleSelect)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Surface(shape = RoundedCornerShape(12.dp), color = if (isSelected || highlighted) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, modifier = Modifier.fillMaxWidth().clickable(onClick = { if (isMultiSelectMode) onToggleSelect() else onEditCard() })) {
+        Column(Modifier.padding(horizontal = 4.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isMultiSelectMode) Checkbox(checked = isSelected, onCheckedChange = { onToggleSelect() })
                 Column(Modifier.weight(1f)) {
-                    Text(card.word, style = MaterialTheme.typography.titleLarge)
+                    Text(card.word, style = MaterialTheme.typography.headlineSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif))
                     Text(listOf(card.partOfSpeech, card.phonetic).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (showReorder) Icon(Icons.Default.DragHandle, "拖曳調整單字順序", dragHandleModifier.size(32.dp))
@@ -821,6 +821,7 @@ private fun CardListItem(
             }
             Text(OcrWordParser.cleanDefinition(card.definition), style = MaterialTheme.typography.bodyLarge)
             if (card.exampleSentence.isNotBlank()) Text(card.exampleSentence, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f), modifier = Modifier.padding(top = 8.dp))
         }
     }
 }

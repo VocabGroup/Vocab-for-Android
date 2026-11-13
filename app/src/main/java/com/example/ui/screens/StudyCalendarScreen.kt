@@ -30,7 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,6 +96,7 @@ fun StudyCalendarScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            com.example.ui.components.EditorialHeading("學習日曆", "查看每日紀錄與補簽。")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SummaryCard("目前連續", "${streak.current} 天", Modifier.weight(1f))
                 SummaryCard("最長連續", "${streak.longest} 天", Modifier.weight(1f))
@@ -103,7 +104,7 @@ fun StudyCalendarScreen(
 
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(

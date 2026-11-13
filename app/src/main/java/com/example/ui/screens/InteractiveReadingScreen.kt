@@ -39,7 +39,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -289,7 +289,7 @@ fun InteractiveReadingScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 item {
-                    Text("點選文章中的重點單字可翻卡、聽發音或練習。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    com.example.ui.components.EditorialContext("互動閱讀", "點選重點單字查詢與翻卡")
                 }
                 item {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -306,12 +306,12 @@ fun InteractiveReadingScreen(
                     )
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        shape = RoundedCornerShape(18.dp)
+                        shape = RoundedCornerShape(0.dp)
                     ) {
                         ClickableText(
                             text = highlighted,
-                            style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 18.sp, lineHeight = 30.sp),
-                            modifier = Modifier.fillMaxWidth().padding(18.dp),
+                            style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface, fontFamily = androidx.compose.ui.text.font.FontFamily.Serif, fontSize = 20.sp, lineHeight = 35.sp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp, horizontal = 4.dp),
                             onClick = { offset ->
                                 val word = highlighted.getStringAnnotations("WORD", offset, offset)
                                     .firstOrNull()?.item ?: return@ClickableText

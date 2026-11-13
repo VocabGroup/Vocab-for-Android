@@ -39,7 +39,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.ui.components.CalmEmptyState
+import com.example.ui.components.EditorialHeading
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,6 +124,7 @@ fun StudyHubScreen(
                 }
             } else {
                 item {
+                    EditorialHeading("翻卡學習", "選擇教材範圍後開始；原有進度會保留。")
                     Text(
                         text = "選擇課程",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),

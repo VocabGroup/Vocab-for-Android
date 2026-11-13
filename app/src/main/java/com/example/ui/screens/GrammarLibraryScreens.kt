@@ -153,7 +153,8 @@ fun GrammarLibrariesScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                Text("選擇課程", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
+                com.example.ui.components.EditorialHeading("文法教材", "課程、筆記與練習集中管理。")
+                Text("選擇課程", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(6.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { CourseChip("全部文法庫 (${libraries.size})", selectedCourse == null) { selectedCourse = null } }

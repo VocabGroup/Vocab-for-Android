@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import com.example.ui.components.ModernButton as Button
@@ -111,8 +112,8 @@ fun GrammarImportScreen(
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
-                Text("選擇教材來源", style = MaterialTheme.typography.headlineSmall)
-                Text("建立新的文法筆記", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                com.example.ui.components.EditorialHeading("選擇教材來源", "建立新的文法筆記")
+                com.example.ui.components.EditorialStep(0, listOf("加入教材", "辨識與校對", "儲存文法"))
             }
             item { ModernListRow("手動建立", "整理核心概念、句型與練習題", Icons.Default.EditNote, onManual) }
             item { ModernListRow("AI 依主題建立", "輸入想學的文法與程度", Icons.Default.AutoAwesome, onAiCreate) }
@@ -224,7 +225,7 @@ fun GrammarNoteDetailScreen(
     } }
 }
 
-@Composable private fun GrammarPanel(title: String, content: @Composable ColumnScope.() -> Unit) { Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(title, fontWeight = FontWeight.Bold); content() } } }
+@Composable private fun GrammarPanel(title: String, content: @Composable ColumnScope.() -> Unit) { com.example.ui.components.EditorialReadingPanel(title, content) }
 @Composable private fun ExpandableGrammarPanel(title: String, expanded: Boolean, onToggle: () -> Unit, text: String) { Card(onClick = onToggle, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Row { Text(title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, if (expanded) "收起" else "展開") }; if (expanded) Text(text) } } }
 
 @OptIn(ExperimentalMaterial3Api::class)

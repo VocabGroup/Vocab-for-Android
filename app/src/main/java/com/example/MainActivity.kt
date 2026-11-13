@@ -90,13 +90,13 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
-    private fun Intent.sharedEnglishText(): String? =
-        takeIf { action == Intent.ACTION_SEND && type?.startsWith("text/") == true }
-            ?.getCharSequenceExtra(Intent.EXTRA_TEXT)
-            ?.toString()
-            ?.trim()
-            ?.take(20_000)
-            ?.takeIf { it.isNotBlank() }
+    private fun Intent.sharedEnglishText(): String? {
+        if (action == Intent.ACTION_VIEW) {
+            return dataString?.let(com.example.data.importer.ShareLinks::canonicalUrl)
+        }
+        return takeIf { action == Intent.ACTION_SEND && type?.startsWith("text/") == true }
+            ?.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.trim()?.take(20_000)?.takeIf { it.isNotBlank() }
+    }
 
     companion object {
         const val EXTRA_WIDGET_ACTION = "widget_action"

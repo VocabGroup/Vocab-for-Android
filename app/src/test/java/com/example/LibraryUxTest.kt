@@ -29,6 +29,17 @@ import java.io.File
 @Config(qualifiers="w412dp-h892dp-420dpi",sdk=[36])
 class LibraryUxTest {
  @get:Rule val compose=createAndroidComposeRule<ComponentActivity>()
+ @Test fun draggingGlassBubbleSwitchesPagesAndKeepsTapNavigation(){
+  var page by mutableIntStateOf(0)
+  compose.setContent{MyApplicationTheme{Surface{MainScreen(page,{page=it},{Text("今日內容")},{Text("教材內容")},{Text("翻卡內容")},{Text("測驗內容")})}}}
+  compose.onNodeWithTag("glass_drag_surface").performTouchInput { swipe(androidx.compose.ui.geometry.Offset(width*.125f,centerY),androidx.compose.ui.geometry.Offset(width*.625f,centerY),500) }
+  compose.onNodeWithText("翻卡內容").assertIsDisplayed()
+  compose.runOnIdle{assertEquals(2,page)}
+  compose.onNodeWithTag("glass_drag_surface").performTouchInput { swipe(androidx.compose.ui.geometry.Offset(width*.625f,centerY),androidx.compose.ui.geometry.Offset(width*.375f,centerY),500) }
+  compose.onNodeWithText("教材內容").assertIsDisplayed()
+  compose.onNodeWithTag("nav_tab_home").performClick()
+  compose.onNodeWithText("今日內容").assertIsDisplayed()
+ }
  @Test fun courseGroupsOpenInlineAndCourseShareSelectsOnlyItsFolders(){
   val decks=listOf(Deck(id=1,name="搜尋單字",category="日常"),Deck(id=2,name="生活會話",category="日常"),Deck(id=3,name="第一課",category="英文"))
   compose.setContent{MyApplicationTheme{FoldersManagementScreen(decks,emptyList(),{_,_,_,_->},{},{},onOpenCardList={},onJumpToStudy={},onJumpToQuiz={})}}
@@ -37,7 +48,7 @@ class LibraryUxTest {
   compose.onNodeWithText("搜尋單字").assertIsDisplayed()
   compose.onNodeWithText("第一課").assertDoesNotExist()
   compose.onRoot().captureRoboImage("build/outputs/library-ux.png")
-  compose.onNodeWithText("分享課程").performClick()
+  compose.onNodeWithContentDescription("分享課程").performClick()
   compose.onNodeWithText("已選 2 個資料夾 · 0 個單字").assertIsDisplayed()
  }
  @Test fun fileImportOpensPreviewEvenAfterHeaderIsScrolledAway(){
@@ -55,11 +66,15 @@ class LibraryUxTest {
     val launched=requireNotNull(saved.getStringArrayList("KEY_COMPONENT_ACTIVITY_LAUNCHED_KEYS")).last()
     compose.activity.activityResultRegistry.dispatchResult(codes[keys.indexOf(launched)],Activity.RESULT_OK,Intent().setData(Uri.fromFile(fixture)))
   }
-  compose.waitUntil(10000){compose.onAllNodesWithText("確認匯入").fetchSemanticsNodes().isNotEmpty()}
-  compose.onNodeWithText("確認匯入").assertIsDisplayed().performClick()
+  compose.waitUntil(10000){compose.onAllNodesWithText("下一步").fetchSemanticsNodes().isNotEmpty()}
+  compose.onNodeWithText("匯入測試 · 1 字 預覽").performClick()
+  compose.onNodeWithText("apple").assertIsDisplayed()
+  compose.onRoot().captureRoboImage("build/outputs/share-preview-350.png")
+  compose.onNodeWithText("下一步").performClick()
+  compose.onNode(hasText("確認匯入") and SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role,androidx.compose.ui.semantics.Role.Button)).assertIsDisplayed().performClick()
   compose.waitUntil(10000){attempts==1}
   compose.onAllNodesWithText("儲存失敗（測試）").onLast().assertIsDisplayed()
-  compose.onNodeWithText("確認匯入").performClick()
+  compose.onNode(hasText("確認匯入") and SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role,androidx.compose.ui.semantics.Role.Button)).performClick()
   compose.waitUntil(10000){imports==1}
  }
  @Test fun fourTabNavigationRetainsQuizArticlesAndAi(){

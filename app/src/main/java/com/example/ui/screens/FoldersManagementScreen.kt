@@ -40,6 +40,8 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Share
 import com.example.ui.components.ModernAlertDialog as AlertDialog
 import com.example.ui.components.ModernButton as Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,7 +58,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -301,7 +303,7 @@ fun FoldersManagementScreen(
                     else TextButton(onClick = { showAllFolders = true }) { Text("全部資料夾") }
                 }
                 TextButton(onClick={importLinkRequested=true}) { Text("匯入分享網址") }
-                if (selectedCourseFilter != null || showAllFolders) Text("長按把手可在同課程排序。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
             }
 
             if (displayedDecks.isEmpty()) {
@@ -329,9 +331,9 @@ fun FoldersManagementScreen(
                     item(key = "course:$course") {
                         if (showAllFolders) Text(course, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Row {
-                            TextButton(onClick = { shareCourse = course }) { Text("分享課程") }
-                            TextButton(onClick = { selectedCourseFilter = course; showAddMenu = true }) { Text("新增教材") }
-                            IconButton(onClick = { coverCourse = course }) { Icon(Icons.Default.Edit, "自訂課程封面") }
+                            IconButton(onClick = { shareCourse = course }) { Icon(Icons.Default.Share, "分享課程") }
+                            IconButton(onClick = { selectedCourseFilter = course; showAddMenu = true }) { Icon(Icons.Default.Add,"新增教材") }
+                            IconButton(onClick = { coverCourse = course }) { Icon(Icons.Default.PhotoLibrary, "自訂課程封面") }
                             IconButton(onClick = { renamedCourseValue = course; courseToRename = course }) { Icon(Icons.Default.Edit, "重新命名課程") }
                         }
                     }

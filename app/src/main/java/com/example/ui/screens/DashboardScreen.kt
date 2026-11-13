@@ -56,7 +56,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -77,6 +77,8 @@ import com.example.data.entity.StudyLog
 import com.example.data.stats.LearningStats
 import com.example.data.stats.LearningProgress
 import com.example.ui.components.StatisticsChart
+import com.example.ui.components.EditorialHeading
+import com.example.ui.components.EditorialContext
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -159,18 +161,18 @@ fun DashboardScreen(
                                     Text(
                                         "全站所有單字卡",
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
                                         "包含所有資料夾",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                                 Text(
                                     text = "$totalCount 張",
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.padding(start = 12.dp)
                                 )
                             }
@@ -303,20 +305,33 @@ fun DashboardScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                Text("繼續今天的學習", style = MaterialTheme.typography.headlineSmall)
-                Text("每天一點，讓英文成為習慣。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                EditorialHeading("今天", LocalDate.now().toString(), action = {
+                    IconButton(onClick = onOpenStudyCalendar) { Icon(Icons.Default.CalendarMonth, "學習日曆") }
+                })
             }
             item {
-                Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
-                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(color = Color.Transparent) {
+                    Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("今日進度", style = MaterialTheme.typography.titleMedium)
-                            Text("連續 ${streak.current} 天", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("等待複習", style = MaterialTheme.typography.titleMedium)
+                            Text("今日 ${progress.completedCards} / ${progress.goalCards} 字\n連續 ${streak.current} 天", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text("${progress.completedCards} / ${progress.goalCards}", style = MaterialTheme.typography.headlineLarge)
+                        Text("$dueCount 字", style = MaterialTheme.typography.displaySmall)
                         LinearProgressIndicator(progress = { progress.goalFraction }, modifier = Modifier.fillMaxWidth().height(5.dp))
                         Text("待複習 $dueCount 張 · ${progress.dailyXp} XP", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(onClick = { pendingFolderAction = "REVIEW" }, enabled = totalCount > 0, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(50.dp).testTag("start_review_button")) { Text("開始複習") }
+                        Button(onClick = { pendingFolderAction = "REVIEW" }, enabled = totalCount > 0, shape = RoundedCornerShape(26.dp), modifier = Modifier.fillMaxWidth().height(52.dp).testTag("start_review_button")) { Text("開始今天的複習") }
+                    }
+                }
+            }
+            (dueCards.firstOrNull() ?: allCards.firstOrNull())?.let { word ->
+                item(key = "featured_word") {
+                    Surface(onClick = { onSelectDeck(word.deckId); onOpenCardList() }, shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                        Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            EditorialContext("來自你的教材", decks.firstOrNull { it.id == word.deckId }?.category)
+                            Text(word.word, style = MaterialTheme.typography.headlineLarge.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif), color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text(word.definition, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text(listOf(word.partOfSpeech, word.phonetic).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
                     }
                 }
             }

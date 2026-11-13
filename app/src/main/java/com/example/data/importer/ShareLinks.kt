@@ -13,9 +13,16 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 data class PublishedShare(val url:String,val id:String,val deleteToken:String,val expiresAt:Long)
+data class ReceivedShare(val folders:List<SharedFolder>,val expiresAt:Long)
 object ShareLinks {
     const val ORIGIN = "https://vocab-adam.pages.dev"
     private val client=OkHttpClient.Builder().callTimeout(25,TimeUnit.SECONDS).followRedirects(false).build()
+    fun canonicalUrl(value:String):String? = runCatching {
+        val uri=java.net.URI(value.trim())
+        val key=if(uri.scheme=="vocab"&&uri.host=="share"&&uri.rawUserInfo==null&&uri.port==-1&&uri.query==null) uri.path.removePrefix("/") else id(value)
+        require(key.matches(Regex("[a-f0-9]{48}")))
+        "$ORIGIN/share#$key"
+    }.getOrNull()
     private fun id(url:String):String {
         val uri=java.net.URI(url.trim())
         require(uri.scheme=="https"&&uri.host=="vocab-adam.pages.dev"&&uri.rawUserInfo==null&&uri.port==-1&&uri.path=="/share") {"請貼上 Vocab 的分享網址"}
@@ -37,7 +44,13 @@ object ShareLinks {
         val url=value.getString("url");val shareId=id(url)
         return PublishedShare(url,shareId,value.getString("deleteToken"),value.getLong("expiresAt"))
     }
-    suspend fun load(url:String):List<SharedFolder> = FolderShare.parse(json(Request.Builder().url("$ORIGIN/api/shares/${id(url)}").build()).getJSONObject("share").toString())
+    suspend fun loadDetails(url:String):ReceivedShare {
+        val value=json(Request.Builder().url("$ORIGIN/api/shares/${id(url)}").build())
+        val expiry=value.getLong("expiresAt")
+        require(expiry>System.currentTimeMillis()) {"分享已到期，請向分享者索取新連結"}
+        return ReceivedShare(FolderShare.parse(value.getJSONObject("share").toString()),expiry)
+    }
+    suspend fun load(url:String):List<SharedFolder> = loadDetails(url).folders
     suspend fun revoke(share:PublishedShare){json(Request.Builder().url("$ORIGIN/api/shares/${id(share.url)}").header("Authorization","Bearer ${share.deleteToken}").delete().build())}
     fun qr(url:String):Bitmap {
         id(url)

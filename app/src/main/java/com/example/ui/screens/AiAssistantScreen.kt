@@ -76,7 +76,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -773,9 +773,9 @@ private fun AssistantWelcome(
     onSuggestion: (String) -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Icon(Icons.Default.AutoAwesome, null, Modifier.size(30.dp), tint = MaterialTheme.colorScheme.primary)
-        Text("一起整理與練習", style = MaterialTheme.typography.headlineSmall)
+        com.example.ui.components.EditorialHeading("一起整理與練習", "從你的教材出發，修改前先預覽。")
         Text("選好可讀取的資料夾，告訴 AI 你想做什麼。任何修改都會先讓你確認。", color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (!apiConfigured) Button(onClick = onOpenSettings) { Text("設定 AI API") }
         else listOf(

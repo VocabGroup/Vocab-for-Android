@@ -35,7 +35,7 @@ class ModernScreensTest {
                 Surface(color = MaterialTheme.colorScheme.background) { GrammarDashboardScreen(listOf(note), {}, {}, {}, {}, {}) }
             }
         }
-        compose.onNodeWithText("讓句型變成直覺").assertIsDisplayed()
+        compose.onNodeWithText("今天的文法").assertIsDisplayed()
         compose.onRoot().captureRoboImage("src/test/screenshots/redesign-grammar-home.png")
     }
 

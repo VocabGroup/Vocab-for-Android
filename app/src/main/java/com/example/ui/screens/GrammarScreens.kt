@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import com.example.ui.components.ModernButton as Button
 import com.example.ui.components.ModernOutlinedButton as OutlinedButton
 import com.example.ui.components.ModernTonalButton as FilledTonalButton
@@ -99,11 +100,10 @@ fun GrammarDashboardScreen(
 
     LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(18.dp, 16.dp, 18.dp, 120.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
-            Text("讓句型變成直覺", style = MaterialTheme.typography.headlineSmall)
-            Text("從理解到應用，一次掌握一個文法。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            com.example.ui.components.EditorialHeading("今天的文法", "從理解到應用，一次掌握一個文法。")
         }
         item {
-            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.primaryContainer) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("今日文法", style = MaterialTheme.typography.titleMedium)
                     Text("${due.size} 個待複習", style = MaterialTheme.typography.headlineLarge)
@@ -579,6 +579,7 @@ fun GrammarEditorScreen(note: GrammarNote?, initialDraft: GrammarDraft? = null, 
             TabRow(selectedTabIndex=editorSection,containerColor=MaterialTheme.colorScheme.surface.copy(alpha=0.92f),divider={}){
                 listOf("基本","句型","題目","補充").forEachIndexed{index,label->Tab(selected=editorSection==index,onClick={editorSection=index},text={Text(label,maxLines=1)})}
             }
+            com.example.ui.components.EditorialContext(course, folder)
             when(editorSection){
                 0->{
                     Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){
@@ -717,8 +718,8 @@ private fun GrammarPatternEditor(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class) @Composable fun GrammarDetailScreen(note:GrammarNote,questionCount:Int,onBack:()->Unit,onEdit:()->Unit,onDelete:()->Unit,onFavorite:()->Unit,onLearn:()->Unit,onQuiz:()->Unit){var confirm by remember{mutableStateOf(false)};if(confirm)AlertDialog(onDismissRequest={confirm=false},title={Text("刪除文法筆記？")},text={Text("筆記、題目與弱點紀錄會一併刪除，且無法復原。")},confirmButton={TextButton(onClick={confirm=false;onDelete()}){Text("刪除",color=MaterialTheme.colorScheme.error)}},dismissButton={TextButton(onClick={confirm=false}){Text("取消")}});Scaffold(topBar={TopAppBar(title={Text(note.title,maxLines=1,overflow=TextOverflow.Ellipsis)},navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"返回")}},actions={IconButton(onClick=onFavorite){Icon(if(note.favorite)Icons.Default.Star else Icons.Default.StarBorder,"收藏")};IconButton(onClick=onEdit){Icon(Icons.Default.Edit,"編輯")};IconButton(onClick={confirm=true}){Icon(Icons.Default.Delete,"刪除")}})},bottomBar={Row(Modifier.fillMaxWidth().padding(12.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){OutlinedButton(onClick=onLearn,modifier=Modifier.weight(1f)){Text("開始學習")};Button(onClick=onQuiz,enabled=questionCount>0,modifier=Modifier.weight(1f)){Text("測驗（$questionCount）")}}}){p->LazyColumn(Modifier.padding(p),contentPadding=PaddingValues(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){item{Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){AssistChip(onClick={},label={Text(note.course)});AssistChip(onClick={},label={Text("熟練度 ${note.masteryPercent}%")});AssistChip(onClick={},label={Text("$questionCount 題")})}};grammarSection("核心概念",note.summary);grammarSection("句型結構",note.structure);grammarSection("使用時機",note.usage);if(note.exampleSentence.isNotBlank())item{Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceContainer)){Column(Modifier.padding(16.dp)){Text("例句",fontWeight=FontWeight.Bold);Text(note.exampleSentence);if(note.exampleTranslation.isNotBlank())Text(note.exampleTranslation,color=MaterialTheme.colorScheme.onSurfaceVariant)}}};grammarSection("常見錯誤",note.commonMistakes);grammarSection("容易混淆",note.comparison);item{Spacer(Modifier.height(64.dp))}}}}
-private fun androidx.compose.foundation.lazy.LazyListScope.grammarSection(title:String,content:String){if(content.isBlank())return;item{Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceContainer)){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text(title,fontWeight=FontWeight.Bold);content.lines().filter(String::isNotBlank).forEach{Text(it)}}}}}
+@OptIn(ExperimentalMaterial3Api::class) @Composable fun GrammarDetailScreen(note:GrammarNote,questionCount:Int,onBack:()->Unit,onEdit:()->Unit,onDelete:()->Unit,onFavorite:()->Unit,onLearn:()->Unit,onQuiz:()->Unit){var confirm by remember{mutableStateOf(false)};if(confirm)AlertDialog(onDismissRequest={confirm=false},title={Text("刪除文法筆記？")},text={Text("筆記、題目與弱點紀錄會一併刪除，且無法復原。")},confirmButton={TextButton(onClick={confirm=false;onDelete()}){Text("刪除",color=MaterialTheme.colorScheme.error)}},dismissButton={TextButton(onClick={confirm=false}){Text("取消")}});Scaffold(topBar={TopAppBar(title={Text(note.title,maxLines=1,overflow=TextOverflow.Ellipsis)},navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"返回")}},actions={IconButton(onClick=onFavorite){Icon(if(note.favorite)Icons.Default.Star else Icons.Default.StarBorder,"收藏")};IconButton(onClick=onEdit){Icon(Icons.Default.Edit,"編輯")};IconButton(onClick={confirm=true}){Icon(Icons.Default.Delete,"刪除")}})},bottomBar={Row(Modifier.fillMaxWidth().padding(12.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){OutlinedButton(onClick=onLearn,modifier=Modifier.weight(1f)){Text("開始學習")};Button(onClick=onQuiz,enabled=questionCount>0,modifier=Modifier.weight(1f)){Text("測驗（$questionCount）")}}}){p->LazyColumn(Modifier.padding(p),contentPadding=PaddingValues(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){item{Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){AssistChip(onClick={},label={Text(note.course)});AssistChip(onClick={},label={Text("熟練度 ${note.masteryPercent}%")});AssistChip(onClick={},label={Text("$questionCount 題")})}};grammarSection("核心概念",note.summary);grammarSection("句型結構",note.structure);grammarSection("使用時機",note.usage);if(note.exampleSentence.isNotBlank())item{Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)){Column(Modifier.padding(16.dp)){Text("例句",fontWeight=FontWeight.Bold);Text(note.exampleSentence);if(note.exampleTranslation.isNotBlank())Text(note.exampleTranslation,color=MaterialTheme.colorScheme.onSurfaceVariant)}}};grammarSection("常見錯誤",note.commonMistakes);grammarSection("容易混淆",note.comparison);item{Spacer(Modifier.height(64.dp))}}}}
+private fun androidx.compose.foundation.lazy.LazyListScope.grammarSection(title:String,content:String){if(content.isBlank())return;item{Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text(title,fontWeight=FontWeight.Bold);content.lines().filter(String::isNotBlank).forEach{Text(it)}}}}}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

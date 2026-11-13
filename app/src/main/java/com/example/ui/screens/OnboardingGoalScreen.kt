@@ -74,7 +74,7 @@ fun OnboardingGoalScreen(
     ) {
         Card(
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -82,11 +82,11 @@ fun OnboardingGoalScreen(
                     .padding(if (responsive.isConstrained) 16.dp else 24.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(68.dp)
+                        .size(52.dp)
                         .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {

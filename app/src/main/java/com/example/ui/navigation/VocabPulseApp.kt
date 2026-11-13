@@ -151,6 +151,7 @@ fun VocabApp(
     var editingCard by remember { mutableStateOf<Flashcard?>(null) }
     var pendingRevealCardId by remember { mutableStateOf<Long?>(null) }
     var pendingSharedText by remember { mutableStateOf<String?>(null) }
+    var pendingShareUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingQuizDeckIds by remember { mutableStateOf<Set<Long>?>(null) }
     var pendingQuizTitle by remember { mutableStateOf("") }
     var reviewDeckIds by remember { mutableStateOf<Set<Long>?>(null) }
@@ -233,13 +234,24 @@ fun VocabApp(
     LaunchedEffect(sharedText) {
         if (!sharedText.isNullOrBlank()) {
             performWorldSwitch(false)
-            pendingSharedText = sharedText
-            editingCard = null
-            navController.navigate(Routes.ADD_EDIT_CARD) { launchSingleTop = true }
+            val shareUrl = com.example.data.importer.ShareLinks.canonicalUrl(sharedText)
+            if (shareUrl != null) {
+                pendingShareUrl = shareUrl
+            } else {
+                pendingSharedText = sharedText
+                editingCard = null
+                navController.navigate(Routes.ADD_EDIT_CARD) { launchSingleTop = true }
+            }
             onSharedTextConsumed()
         }
     }
 
+    com.example.ui.components.FolderSharingPanel(
+        decks = decks, cards = allCards, course = null, showActions = false,
+        onImport = viewModel::importSharedFolders, onUndo = viewModel::undoSharedFolders,
+        requestLink = pendingShareUrl, onRequestLinkHandled = { pendingShareUrl = null },
+        onOpenImported = { id -> viewModel.selectDeck(id); navController.navigate(Routes.CARD_LIST) { launchSingleTop = true } }
+    )
     if (showSwitchConfirmDialog) {
         com.example.ui.components.ModernAlertDialog(
             onDismissRequest = { showSwitchConfirmDialog = false },

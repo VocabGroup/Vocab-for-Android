@@ -78,7 +78,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -232,6 +232,12 @@ fun QuizGamesScreen(
                     Text("實際題數不超過符合題型的單字數；開始新測驗會取代未完成進度。",style=MaterialTheme.typography.bodySmall)
                     val selectedCards = cards.filter { it.deckId in deckIds }
                     QuizPlayMode.entries.forEach { mode ->
+                        when (mode) {
+                            QuizPlayMode.CHINESE_TO_ENGLISH -> com.example.ui.components.EditorialHeading("理解與拼寫")
+                            QuizPlayMode.LISTENING_CHOICE -> com.example.ui.components.EditorialHeading("聽力與應用")
+                            QuizPlayMode.PRONOUNCE_WORD -> com.example.ui.components.EditorialHeading("發音與配對")
+                            else -> Unit
+                        }
                         val eligibleCount = eligibleCardsForMode(mode, selectedCards).size
                         OutlinedButton(
                             onClick = {

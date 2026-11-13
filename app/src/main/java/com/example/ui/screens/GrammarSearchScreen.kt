@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import com.example.ui.components.ModernCard as Card
 import com.example.ui.components.ModernTextField as OutlinedTextField
 
@@ -34,16 +35,14 @@ fun GrammarSearchScreen(notes: List<GrammarNote>, onOpen: (GrammarNote) -> Unit,
             OutlinedTextField(query, { query = it }, singleLine = true, shape = RoundedCornerShape(28.dp),
                 placeholder = { Text("搜尋文法、句型、例句或標籤", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = { Icon(Icons.Default.Search, null) }, modifier = Modifier.fillMaxWidth())
+            if(query.isBlank())com.example.ui.components.EditorialHeading("尋找文法", "搜尋已儲存筆記的名稱、句型、例句與標籤。")
             if (query.isNotBlank() && results.isEmpty()) Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("找不到符合的文法筆記") }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(results, key = { it.id }) { note ->
-                    Card(onClick = { onOpen(note) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(note.title, fontWeight = FontWeight.Bold)
-                            Text("${note.course} · ${note.folder}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                            Text(note.structure.ifBlank { note.summary }, maxLines = 2, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
+                    com.example.ui.components.EditorialActionRow(
+                        note.title, "${note.course} › ${note.folder}\n${note.structure.ifBlank { note.summary }}",
+                        Icons.Default.Search, { onOpen(note) }
+                    )
                 }
             }
         }

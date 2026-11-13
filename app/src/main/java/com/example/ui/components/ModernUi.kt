@@ -23,6 +23,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 
 @Composable
 fun ModernButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
@@ -30,7 +32,7 @@ fun ModernButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Bo
     elevation: ButtonElevation? = null, border: androidx.compose.foundation.BorderStroke? = null,
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding, interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit) {
-    Button(onClick, modifier.heightIn(min = 48.dp), enabled, RoundedCornerShape(20.dp), colors, null, border, contentPadding, interactionSource, content)
+    Button(onClick, modifier.heightIn(min = 48.dp), enabled, shape, colors, elevation, border, contentPadding, interactionSource, content)
 }
 
 @Composable
@@ -39,7 +41,7 @@ fun ModernOutlinedButton(onClick: () -> Unit, modifier: Modifier = Modifier, ena
     elevation: ButtonElevation? = null, border: androidx.compose.foundation.BorderStroke? = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding, interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit) {
-    OutlinedButton(onClick, modifier.heightIn(min = 48.dp), enabled, RoundedCornerShape(20.dp), colors, null, border, contentPadding, interactionSource, content)
+    OutlinedButton(onClick, modifier.heightIn(min = 48.dp), enabled, shape, colors, elevation, border, contentPadding, interactionSource, content)
 }
 
 @Composable
@@ -48,7 +50,7 @@ fun ModernTonalButton(onClick: () -> Unit, modifier: Modifier = Modifier, enable
     elevation: ButtonElevation? = null, border: androidx.compose.foundation.BorderStroke? = null,
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding, interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit) {
-    FilledTonalButton(onClick, modifier.heightIn(min = 48.dp), enabled, RoundedCornerShape(20.dp), colors, null, border, contentPadding, interactionSource, content)
+    FilledTonalButton(onClick, modifier.heightIn(min = 48.dp), enabled, shape, colors, elevation, border, contentPadding, interactionSource, content)
 }
 
 @Composable
@@ -94,7 +96,7 @@ fun ModernCard(
     border: androidx.compose.foundation.BorderStroke? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(modifier = modifier, shape = RoundedCornerShape(24.dp), colors = colors, elevation = CardDefaults.cardElevation(defaultElevation = 0.dp), border = border, content = content)
+    Card(modifier = modifier, shape = shape, colors = colors, elevation = elevation, border = border, content = content)
 }
 
 @Composable
@@ -109,7 +111,7 @@ fun ModernCard(
     interactionSource: MutableInteractionSource? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(onClick = onClick, modifier = modifier, enabled = enabled, shape = RoundedCornerShape(24.dp), colors = colors, elevation = CardDefaults.cardElevation(defaultElevation = 0.dp), border = border, interactionSource = interactionSource, content = content)
+    Card(onClick = onClick, modifier = modifier, enabled = enabled, shape = shape, colors = colors, elevation = elevation, border = border, interactionSource = interactionSource, content = content)
 }
 
 @Composable
@@ -135,11 +137,11 @@ fun ModernTextField(
     interactionSource: MutableInteractionSource? = null,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(if (leadingIcon != null && singleLine) 28.dp else 16.dp),
     colors: TextFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+        focusedContainerColor = MaterialTheme.colorScheme.surface,
+        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
         disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
         focusedBorderColor = MaterialTheme.colorScheme.primary,
-        unfocusedBorderColor = Color.Transparent,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
         disabledBorderColor = Color.Transparent
     )
 ) {
@@ -150,7 +152,7 @@ fun ModernTextField(
         supportingText = supportingText, isError = isError, visualTransformation = visualTransformation,
         keyboardOptions = keyboardOptions, keyboardActions = keyboardActions, singleLine = singleLine,
         maxLines = maxLines, minLines = minLines, interactionSource = interactionSource,
-        shape = RoundedCornerShape(if (singleLine && label == null && placeholder != null) 28.dp else 16.dp), colors = colors)
+        shape = shape, colors = colors)
 }
 
 /** Shared layout for vocabulary folders and grammar libraries, with actions kept in reach. */
@@ -175,9 +177,10 @@ fun ModernCollectionRow(
 ) {
     var menu by remember { mutableStateOf(false) }
     val primaryAction = when (mode) { "learn" -> onLearn; "quiz" -> onQuiz; else -> onManage }
-    Surface(onClick = primaryAction, enabled = mode == "manage" || count > 0, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, modifier = modifier.then(primaryActionModifier).fillMaxWidth()) {
+    val separator = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .6f)
+    Surface(onClick = primaryAction, enabled = mode == "manage" || count > 0, color = Color.Transparent, modifier = modifier.then(primaryActionModifier).fillMaxWidth().drawBehind { drawLine(separator, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) }) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            Surface(shape = RoundedCornerShape(12.dp), color = Color.Transparent) {
                 Icon(if (grammar) Icons.Default.MenuBook else Icons.Default.Folder, null, Modifier.padding(9.dp).size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -209,8 +212,9 @@ fun ModernCollectionRow(
 
 @Composable
 fun ModernListRow(title: String, subtitle: String? = null, icon: ImageVector? = null, onClick: () -> Unit, trailing: @Composable (() -> Unit)? = null, modifier: Modifier = Modifier) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, modifier = modifier.fillMaxWidth()) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    val separator = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .6f)
+    Surface(onClick = onClick, color = Color.Transparent, modifier = modifier.fillMaxWidth().drawBehind { drawLine(separator, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) }) {
+        Row(Modifier.padding(horizontal = 4.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             icon?.let { Icon(it, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)

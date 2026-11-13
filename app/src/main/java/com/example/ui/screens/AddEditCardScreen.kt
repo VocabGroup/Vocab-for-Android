@@ -51,7 +51,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -527,11 +527,11 @@ fun AddEditCardScreen(
                 Spacer(modifier = Modifier.height(4.dp))
                 Card(
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.padding(vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(
@@ -655,10 +655,10 @@ private fun CompactCardEditItem(
         }
     }
 
-    Card(modifier = Modifier.fillMaxWidth().testTag("compact_card_edit_item_$index")) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Card(modifier = Modifier.fillMaxWidth().testTag("compact_card_edit_item_$index"), colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)) {
+        Column(Modifier.padding(horizontal = 4.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("單字卡 #$index", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text("${index.toString().padStart(2, '0')}　${cardState.word.ifBlank { "新單字" }}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = onFetchAiDetails, enabled = !cardState.isAiLoading && cardState.word.isNotBlank()) {
                     if (cardState.isAiLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     else Icon(Icons.Default.AutoAwesome, "AI 補齊", tint = MaterialTheme.colorScheme.primary)
@@ -673,6 +673,7 @@ private fun CompactCardEditItem(
             OutlinedTextField(cardState.definition, { cardState.definition = it }, label = { Text("繁體中文定義") }, minLines = 2, modifier = Modifier.fillMaxWidth().testTag("compact_def_input_$index"))
             OutlinedTextField(cardState.exampleSentence, { cardState.exampleSentence = it }, label = { Text("英文例句") }, minLines = 2, modifier = Modifier.fillMaxWidth().testTag("compact_sentence_input_$index"))
             OutlinedTextField(cardState.exampleTranslation, { cardState.exampleTranslation = it }, label = { Text("中文翻譯") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
         }
     }
 }

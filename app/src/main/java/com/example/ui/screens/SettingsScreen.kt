@@ -62,7 +62,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.ui.components.EditorialTopAppBar as TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -357,6 +357,7 @@ fun SettingsScreen(
             modifier = Modifier.padding(padding).padding(top = 6.dp).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (settingsPage == "設定") item { com.example.ui.components.EditorialHeading("依照你的方式學習", "外觀、AI、朗讀與資料，集中在這裡。") }
             if (settingsPage == "設定") {
                 items(listOf(
                     "外觀" to "跟隨系統、亮色與暗色",
@@ -370,12 +371,12 @@ fun SettingsScreen(
                 )) { (title, subtitle) ->
                     Surface(
                         onClick = { settingsPage = title },
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.surface,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+                        color = androidx.compose.ui.graphics.Color.Transparent,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            Modifier.padding(18.dp),
+                            Modifier.padding(horizontal = 4.dp, vertical = 18.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
