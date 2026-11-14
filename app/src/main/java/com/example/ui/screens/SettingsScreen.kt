@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import androidx.compose.foundation.layout.imePadding
 
 import android.Manifest
 import android.app.TimePickerDialog
@@ -340,7 +341,7 @@ fun SettingsScreen(
         )
     }
 
-    Scaffold(
+    Scaffold(modifier = Modifier.imePadding(),
         topBar = {
             TopAppBar(
                 expandedHeight = 48.dp,

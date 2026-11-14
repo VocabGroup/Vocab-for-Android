@@ -30,7 +30,7 @@ fun GrammarSearchScreen(notes: List<GrammarNote>, onOpen: (GrammarNote) -> Unit,
                 .any { it.contains(query.trim(), ignoreCase = true) }
         }
     }
-    Scaffold(topBar = { TopAppBar(title = { Text("搜尋已儲存文法") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { padding ->
+    Scaffold(modifier = Modifier.imePadding(), topBar = { TopAppBar(title = { Text("搜尋已儲存文法") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(query, { query = it }, singleLine = true, shape = RoundedCornerShape(28.dp),
                 placeholder = { Text("搜尋文法、句型、例句或標籤", maxLines = 1, overflow = TextOverflow.Ellipsis) },

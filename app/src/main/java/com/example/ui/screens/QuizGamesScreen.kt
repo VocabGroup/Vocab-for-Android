@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import androidx.compose.foundation.layout.imePadding
 import org.json.JSONObject
 import com.example.util.longList
 import com.example.util.intList
@@ -298,8 +299,7 @@ fun QuizGamesScreen(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
                 )
             },
-            modifier = modifier
-        ) { innerPadding ->
+            modifier = modifier.imePadding()) { innerPadding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -382,8 +382,7 @@ fun QuizGamesScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
-        modifier = modifier
-    ) { innerPadding ->
+        modifier = modifier.imePadding()) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()

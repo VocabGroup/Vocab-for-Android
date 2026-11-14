@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import androidx.compose.foundation.layout.imePadding
 
 import android.content.Intent
 import android.net.Uri
@@ -153,7 +154,7 @@ fun ExternalImportScreen(
         }
     }
 
-    Scaffold(
+    Scaffold(modifier = Modifier.imePadding(),
         topBar = {
             TopAppBar(
                 expandedHeight = 48.dp,

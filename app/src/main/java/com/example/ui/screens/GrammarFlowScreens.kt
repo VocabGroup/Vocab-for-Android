@@ -107,7 +107,7 @@ fun GrammarImportScreen(
         confirmButton = { Button(enabled = pastedText.isNotBlank() && !busy, onClick = { scope.launch { busy = true; message = null; runCatching { onRecognizeText(pastedText, "ENRICH") }.onSuccess { showPasteDialog = false; onPreview(listOf(it)) }.onFailure { message = it.message ?: "無法整理文字" }; busy = false } }) { Text("建立預覽") } },
         dismissButton = { TextButton(onClick = { showPasteDialog = false }) { Text("取消") } }
     )
-    Scaffold(
+    Scaffold(modifier = Modifier.imePadding(),
         topBar = { TopAppBar(title = { Text("匯入文法") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -189,7 +189,7 @@ fun GrammarNoteDetailScreen(
     var showWhy by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text("刪除文法筆記？") }, text = { Text("筆記、題目與弱點紀錄會一併刪除，且無法復原。") }, confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("刪除", color = MaterialTheme.colorScheme.error) } }, dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } })
-    Scaffold(
+    Scaffold(modifier = Modifier.imePadding(),
         topBar = { TopAppBar(title = { Text(note.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }, actions = { IconButton(onClick = onFavorite) { Icon(if (note.favorite) Icons.Default.Star else Icons.Default.StarBorder, "收藏") }; IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, "編輯") }; IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Default.Delete, "刪除") } }) },
         bottomBar = { Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { OutlinedButton(onClick = onLearn, modifier = Modifier.weight(1f)) { Text("開始學習") }; Button(onClick = onQuiz, enabled = questionCount > 0, modifier = Modifier.weight(1f)) { Text("開始測驗") } } }
     ) { padding -> LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -226,7 +226,15 @@ fun GrammarNoteDetailScreen(
 }
 
 @Composable private fun GrammarPanel(title: String, content: @Composable ColumnScope.() -> Unit) { com.example.ui.components.EditorialReadingPanel(title, content) }
-@Composable private fun ExpandableGrammarPanel(title: String, expanded: Boolean, onToggle: () -> Unit, text: String) { Card(onClick = onToggle, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Row { Text(title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, if (expanded) "收起" else "展開") }; if (expanded) Text(text) } } }
+@Composable private fun ExpandableGrammarPanel(title: String, expanded: Boolean, onToggle: () -> Unit, text: String) {
+    Column(Modifier.fillMaxWidth()) {
+        TextButton(onClick=onToggle,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {
+            Text(title,style=MaterialTheme.typography.titleMedium,modifier=Modifier.weight(1f));Icon(if(expanded)Icons.Default.ExpandLess else Icons.Default.ExpandMore,if(expanded)"收起" else "展開")
+        }
+        if(expanded)Text(text,style=MaterialTheme.typography.bodyLarge,modifier=Modifier.padding(vertical=12.dp))
+        HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -250,7 +258,7 @@ fun GrammarImportPreviewScreen(
         confirmButton = { Button(enabled = editTitle.isNotBlank(), onClick = { drafts[index] = drafts[index].copy(title = editTitle.trim(), summary = editSummary); editingIndex = null }) { Text("套用") } },
         dismissButton = { TextButton(onClick = { editingIndex = null }) { Text("取消") } }
     ) }
-    Scaffold(
+    Scaffold(modifier = Modifier.imePadding(),
         topBar = { TopAppBar(title = { Text("匯入預覽") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) },
         bottomBar = { Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text("重新辨識") }; Button(enabled = selectedDrafts.isNotEmpty(), onClick = { onSave(selectedDrafts, course, duplicateMode) }, modifier = Modifier.weight(1f)) { Text("儲存 ${selectedDrafts.size} 篇") } } }
     ) { padding -> LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -274,7 +282,7 @@ fun GrammarImportPreviewScreen(
 fun GrammarQuizResultScreen(noteTitle: String, result: GrammarQuizResult, questions: List<GrammarQuestion>, onBack: () -> Unit, onPracticeWrong: () -> Unit, onRetryAll: () -> Unit) {
     val wrong = questions.filter { it.id in result.wrongQuestionIds }.sortedByDescending { result.wrongCounts[it.id] ?: 0 }
     var showWrongDetails by remember { mutableStateOf(false) }
-    Scaffold(topBar = { TopAppBar(title = { Text("測驗完成") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.Close, "關閉") } }) }) { padding ->
+    Scaffold(modifier = Modifier.imePadding(), topBar = { TopAppBar(title = { Text("測驗完成") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.Close, "關閉") } }) }) { padding ->
         LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) { Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) { Text("本次正確率", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${result.accuracyPercent}%", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold); Text("首次答對 ${result.firstTryCorrect}／${result.totalQuestions} · 共作答 ${result.totalAttempts} 次") } } }
             item { Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("熟練度變化", fontWeight = FontWeight.Bold); Row { Text(noteTitle, modifier = Modifier.weight(1f)); Text("${result.masteryBefore}% → ${result.masteryAfter}%", fontWeight = FontWeight.Bold) }; LinearProgressIndicator(progress = { result.masteryAfter / 100f }, modifier = Modifier.fillMaxWidth()); Text("依首次答對與本次錯題計算。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
@@ -316,7 +324,7 @@ fun GrammarQuizFlowScreen(
         val reward = firstTryCorrect * 5
         onComplete(GrammarQuizResult(noteId, original.size, firstTryCorrect, totalAttempts, wrongCounts.keys.toList(), wrongCounts.toMap(), masteryBefore, (masteryBefore + reward - penalty).coerceIn(0, 100)))
     }
-    Scaffold(
+    Scaffold(modifier = Modifier.imePadding(),
         topBar = { TopAppBar(title = { Text("文法測驗") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.Close, "退出") } }, actions = { Text("${(index + 1).coerceAtMost(queue.size)}／${queue.size}", modifier = Modifier.padding(end = 16.dp)) }) },
         bottomBar = { if (question != null) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(enabled = !checked, onClick = { hint = true }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Lightbulb, null); Spacer(Modifier.width(5.dp)); Text("提示") }

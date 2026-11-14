@@ -70,13 +70,13 @@ fun ModernChoiceRow(text: String, selected: Boolean, onClick: () -> Unit, enable
 fun ModernTabRow(
     selectedTabIndex: Int,
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
+    containerColor: Color = Color.Transparent,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     indicator: @Composable (List<TabPosition>) -> Unit = {},
     divider: @Composable () -> Unit = {},
     tabs: @Composable () -> Unit
 ) {
-    TabRow(selectedTabIndex = selectedTabIndex, modifier = modifier.clip(RoundedCornerShape(18.dp)), containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
+    TabRow(selectedTabIndex = selectedTabIndex, modifier = modifier, containerColor = containerColor, contentColor = MaterialTheme.colorScheme.onSurface,
         indicator = { positions ->
             if (selectedTabIndex in positions.indices) {
                 val position = positions[selectedTabIndex]
@@ -225,7 +225,8 @@ fun ModernListRow(title: String, subtitle: String? = null, icon: ImageVector? = 
     }
 }
 
-/** Scrollable bottom-aligned dialog: no old oversized centre panel, safe with keyboard. */
+/** Bottom sheet that keeps actions reachable when the keyboard or large text reduces space. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ModernAlertDialog(
     onDismissRequest: () -> Unit,
@@ -243,15 +244,16 @@ fun ModernAlertDialog(
     tonalElevation: androidx.compose.ui.unit.Dp = 0.dp,
     properties: DialogProperties = DialogProperties()
 ) {
-    Dialog(onDismissRequest = onDismissRequest, properties = DialogProperties(dismissOnBackPress = properties.dismissOnBackPress, dismissOnClickOutside = properties.dismissOnClickOutside, usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().clickable(onClick = onDismissRequest).safeDrawingPadding().imePadding().padding(12.dp), contentAlignment = Alignment.BottomCenter) {
+    Dialog(onDismissRequest = onDismissRequest, properties = DialogProperties(dismissOnBackPress = properties.dismissOnBackPress, dismissOnClickOutside = properties.dismissOnClickOutside, securePolicy = properties.securePolicy, usePlatformDefaultWidth = false, decorFitsSystemWindows = properties.decorFitsSystemWindows)) {
+        BoxWithConstraints(Modifier.fillMaxSize().clickable(onClick = onDismissRequest).safeDrawingPadding().imePadding().padding(12.dp), contentAlignment = Alignment.BottomCenter) {
+            val compact = maxHeight < 420.dp
             Surface(modifier = modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 640.dp).clickable(onClick = {}), shape = shape, color = containerColor, tonalElevation = tonalElevation) {
-                Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.padding(if(compact)16.dp else 22.dp), verticalArrangement = Arrangement.spacedBy(if(compact)10.dp else 16.dp)) {
                     Surface(Modifier.align(Alignment.CenterHorizontally).size(36.dp, 4.dp), shape = RoundedCornerShape(2.dp), color = MaterialTheme.colorScheme.outlineVariant) {}
                     icon?.let { CompositionLocalProvider(LocalContentColor provides iconContentColor) { it() } }
-                    title?.let { CompositionLocalProvider(LocalContentColor provides titleContentColor) { ProvideTextStyle(MaterialTheme.typography.titleLarge) { it() } } }
+                    title?.let { Box(Modifier.heightIn(max=if(compact)72.dp else 120.dp).verticalScroll(rememberScrollState())) { CompositionLocalProvider(LocalContentColor provides titleContentColor) { ProvideTextStyle(MaterialTheme.typography.titleLarge) { it() } } } }
                     text?.let { Box(Modifier.weight(1f, fill = false)) { CompositionLocalProvider(LocalContentColor provides textContentColor) { ProvideTextStyle(MaterialTheme.typography.bodyMedium) { it() } } } }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) { dismissButton?.invoke(); Spacer(Modifier.width(8.dp)); confirmButton() }
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) { dismissButton?.invoke(); confirmButton() }
                 }
             }
         }

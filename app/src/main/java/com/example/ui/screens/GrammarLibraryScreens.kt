@@ -1,8 +1,11 @@
 package com.example.ui.screens
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.MoreVert
 import com.example.ui.components.ModernCollectionRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -132,7 +135,7 @@ fun GrammarLibrariesScreen(
         )
     }
 
-    Scaffold(
+    Scaffold(modifier = Modifier.imePadding(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             if (highlightedAction == "manage") {
@@ -268,7 +271,7 @@ private fun GrammarLibraryEditDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("編輯文法庫") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("課程：${library.course}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(name, { name = it }, label = { Text("名稱") }, singleLine = true)
             OutlinedTextField(description, { description = it }, label = { Text("說明（選填）") }, singleLine = true)
@@ -319,7 +322,7 @@ fun GrammarLibraryManageScreen(
         confirmButton = { Button(onClick = { pendingDelete = null; onDelete(note) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("刪除") } },
         dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("取消") } }
     ) }
-    Scaffold(
+    Scaffold(modifier = Modifier.imePadding(),
         floatingActionButton = { FloatingActionButton(onClick = onAdd) { Icon(Icons.Default.Add, "新增文法") } }
     ) { padding ->
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -341,7 +344,7 @@ fun GrammarLibraryManageScreen(
                 val note = filtered.firstOrNull { it.id == id } ?: return@itemsIndexed
                 ReorderableItem(reorderState, key = id) { dragging ->
                     var noteMenu by remember(note.id) { mutableStateOf(false) }
-                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
+                    Surface(color = Color.Transparent) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {

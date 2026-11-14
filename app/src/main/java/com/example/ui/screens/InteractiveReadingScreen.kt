@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -236,7 +237,7 @@ fun InteractiveReadingScreen(
         }
     }
 
-    Scaffold(
+    Scaffold(modifier = Modifier.imePadding(),
         topBar = {
             TopAppBar(
                 title = { Text(if (quizMode) "閱讀測驗" else "互動閱讀") },

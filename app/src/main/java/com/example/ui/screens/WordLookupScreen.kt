@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import androidx.compose.foundation.layout.imePadding
 
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
@@ -159,7 +160,7 @@ fun WordLookupScreen(
         )
     }
 
-    Scaffold(
+    Scaffold(modifier = Modifier.imePadding(),
         topBar = {
             TopAppBar(
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },

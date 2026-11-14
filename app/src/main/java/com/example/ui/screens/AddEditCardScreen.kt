@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import androidx.compose.ui.text.style.TextOverflow
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -425,6 +426,8 @@ fun AddEditCardScreen(
                 title = {
                     Text(
                         text = if (editingCard == null) "新增單字卡" else "編輯單字卡",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                 },
@@ -486,10 +489,10 @@ fun AddEditCardScreen(
                         } else {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null)
                         }
-                        if (!responsive.isConstrained) {
-                            Spacer(Modifier.width(4.dp))
-                            Text("AI 一鍵補齊", fontWeight = FontWeight.Bold)
-                        }
+                        Spacer(Modifier.width(4.dp))
+                        Text("AI 一鍵補齊", fontWeight = FontWeight.Bold,
+                            style = if (responsive.isConstrained) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge,
+                            maxLines = 1)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)

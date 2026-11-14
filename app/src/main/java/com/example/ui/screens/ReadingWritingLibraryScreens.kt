@@ -171,8 +171,7 @@ fun ReadingLibraryScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            com.example.ui.components.EditorialHeading("文章閱讀", "選擇文章，直接閱讀、查字與練習。")
-            Text("把正在讀的文章放在最前面，點文字即可查詢與建立單字卡。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            com.example.ui.components.EditorialHeading("文章閱讀", "選擇文章開始閱讀，點文字即可查字與建立單字卡。")
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
