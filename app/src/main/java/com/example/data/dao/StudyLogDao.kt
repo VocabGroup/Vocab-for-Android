@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface StudyLogDao {
+    @Query("DELETE FROM study_logs WHERE cardId IN (:cardIds)")
+    suspend fun deleteForCards(cardIds:List<Long>)
     @Query("UPDATE study_logs SET cardId = :targetCardId WHERE cardId = :sourceCardId")
     suspend fun reassignCardLogs(sourceCardId: Long, targetCardId: Long)
     @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -1,8 +1,17 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.example.ui.screens
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.ui.text.style.TextOverflow
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import com.example.ui.components.SelectionAction
+import com.example.ui.components.SelectionIcons
+import com.example.data.WorkspaceTransferResult
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -126,6 +135,8 @@ fun CardListScreen(
     onStartReview: (Set<Long>?) -> Unit = { _ -> },
     onOpenQuizGames: (Set<Long>?) -> Unit = { _ -> },
     onOpenAssistant: () -> Unit = {},
+    onShareFolder:(Long)->Unit={},
+    onTransfer:suspend(List<Long>,Long,Boolean,Boolean)->Result<WorkspaceTransferResult> = {_,_,_,_->Result.failure(IllegalStateException("搬移尚未連接"))},
     pronunciationWeakCardIds: Set<Long> = emptySet(),
     onPronunciationResult: (Long, Int) -> Unit = { _, _ -> },
     onBack: () -> Unit,
@@ -147,6 +158,18 @@ fun CardListScreen(
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     var cardPendingDelete by remember { mutableStateOf<Flashcard?>(null) }
     var showMoveCardsDialog by remember { mutableStateOf(false) }
+    var copyMode by remember { mutableStateOf(false) }
+    var duplicateTarget by remember { mutableStateOf<Long?>(null) }
+    var transferBusy by remember { mutableStateOf(false) }
+    fun transfer(target:Long,overwrite:Boolean){coroutineScope.launch{
+        transferBusy=true
+        onTransfer(selectedCards.map{it.id},target,copyMode,overwrite).onSuccess{
+            selectedCards.clear();isMultiSelectMode=false;showMoveCardsDialog=false;duplicateTarget=null
+            snackbarHostState.showSnackbar("已處理 ${it.changed} 張，略過 ${it.skipped} 張")
+        }.onFailure{snackbarHostState.showSnackbar(it.message?:"操作失敗")}
+        transferBusy=false
+    }}
+    duplicateTarget?.let{target->AlertDialog(onDismissRequest={if(!transferBusy)duplicateTarget=null},title={Text("發現重複單字")},text={Text("略過會保留來源單字；覆蓋會更新目標內容並保留目標的學習紀錄。")},confirmButton={TextButton(enabled=!transferBusy,onClick={transfer(target,true)}){Text("覆蓋")}},dismissButton={TextButton(enabled=!transferBusy,onClick={transfer(target,false)}){Text("略過")}})}
     var showCreateMoveFolderDialog by remember { mutableStateOf(false) }
 
     cardPendingDelete?.let { card ->
@@ -416,7 +439,7 @@ fun CardListScreen(
     if (showMoveCardsDialog) {
         AlertDialog(
             onDismissRequest = { showMoveCardsDialog = false },
-            title = { Text("移動 ${selectedCards.size} 張單字卡", fontWeight = FontWeight.Bold) },
+            title = { Text("${if(copyMode)"複製" else "移動"} ${selectedCards.size} 張單字卡", fontWeight = FontWeight.Bold) },
             text = {
                 LazyColumn(
                     modifier = Modifier
@@ -428,9 +451,10 @@ fun CardListScreen(
                         val cardCount = cards.count { it.deckId == deck.id }
                         Surface(
                             onClick = {
-                                val moving = selectedCardsInDisplayOrder()
-                                showMoveCardsDialog = false
-                                onMoveCards(moving, deck.id, ::finishMove)
+                                if(!transferBusy){
+                                    val words=selectedCards.filter{it.deckId!=deck.id}.map{it.normalizedWord}.toSet()
+                                    if(cards.any{it.deckId==deck.id&&it.normalizedWord in words})duplicateTarget=deck.id else transfer(deck.id,false)
+                                }
                             },
                             shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -449,7 +473,7 @@ fun CardListScreen(
                 }
             },
             confirmButton = {
-                TextButton(
+                if(!copyMode)TextButton(
                     onClick = {
                         showMoveCardsDialog = false
                         showCreateMoveFolderDialog = true
@@ -486,33 +510,22 @@ fun CardListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                expandedHeight = 48.dp,
-                title = { Text("單字卡 · ${deckFilteredCards.size}", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onOpenAssistant) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = "Vocab AI")
-                    }
-                    IconButton(
-                        onClick = {
-                            isMultiSelectMode = !isMultiSelectMode
-                            if (!isMultiSelectMode) selectedCards.clear()
-                        },
-                        modifier = Modifier.testTag("toggle_multi_select_button")
-                    ) {
-                        Icon(
-                            imageVector = if (isMultiSelectMode) Icons.Default.CheckCircle else Icons.Default.EditNote,
-                            contentDescription = if (isMultiSelectMode) "完成多選" else "多選管理",
-                            tint = if (isMultiSelectMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            if(isMultiSelectMode) Surface(color=Color(0xFF903A43)){
+                Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                    SelectionAction(Icons.Default.Close,"結束多選"){selectedCards.clear();isMultiSelectMode=false}
+                    Text("已選 ${selectedCards.size}",Modifier.weight(1f),color=Color.White,maxLines=1)
+                    SelectionAction(SelectionIcons.All,"全選"){if(selectedCards.size==finalFilteredCards.size)selectedCards.clear()else{selectedCards.clear();selectedCards.addAll(finalFilteredCards)}}
+                    SelectionAction(Icons.Default.ContentCopy,"複製",selectedCards.isNotEmpty()){copyMode=true;showMoveCardsDialog=true}
+                    SelectionAction(Icons.Default.DriveFileMove,"移動",selectedCards.isNotEmpty()){copyMode=false;showMoveCardsDialog=true}
+                    SelectionAction(Icons.Default.Delete,"刪除",selectedCards.isNotEmpty()){showBulkDeleteConfirm=true}
+                }
+            }else TopAppBar(
+                title={Text(activeDeck?.let{"${it.category} › ${it.name}"}?:"所有單字",maxLines=1,overflow=TextOverflow.Ellipsis)},
+                navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"返回資料夾")}},
+                actions={
+                    selectedDeckId?.let{id->IconButton(onClick={onShareFolder(id)}){Icon(Icons.Default.Share,"分享資料夾")}}
+                    IconButton(onClick={isMultiSelectMode=true},modifier=Modifier.testTag("toggle_multi_select_button")){Icon(SelectionIcons.Multiple,"多選管理")}
+                }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -535,7 +548,7 @@ fun CardListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(top = 6.dp)
+                .padding(top = 2.dp)
                 .padding(horizontal = 16.dp)
         ) {
             val courses = remember(decks) { decks.map { it.category }.distinct() }
@@ -543,7 +556,7 @@ fun CardListScreen(
                 if (selectedCourseFilter == null) decks else decks.filter { it.category == selectedCourseFilter }
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 0.dp, bottom = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 CompactSelector(
@@ -633,16 +646,16 @@ fun CardListScreen(
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
             ) {
                 Button(
                     onClick = { onStartReview(selectedScopeDeckIds) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = CircleShape,
                     modifier = Modifier.weight(1f).heightIn(min = 46.dp).testTag("folder_start_review_button")
                 ) { Text("學習", fontWeight = FontWeight.Bold) }
                 OutlinedButton(
                     onClick = { onOpenQuizGames(selectedScopeDeckIds) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = CircleShape,
                     modifier = Modifier.weight(1f).heightIn(min = 46.dp).testTag("folder_open_quiz_button")
                 ) { Text("測驗", fontWeight = FontWeight.Bold) }
             }
@@ -662,78 +675,6 @@ fun CardListScreen(
                 item { PlainTab("發音弱點 $pronunciationWeakCount", selectedTab == 3, { selectedTab = 3 }, Modifier.width(112.dp)) }
             }
 
-            if (isMultiSelectMode) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "已選取 ${selectedCards.size} / ${finalFilteredCards.size}",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                            maxItemsInEachRow = if (responsive.isSmallWidth || responsive.isLargeText) 2 else 4,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            TextButton(
-                                onClick = {
-                                    selectedCards.clear()
-                                    selectedCards.addAll(finalFilteredCards)
-                                }
-                            ) {
-                                Text("全選", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            TextButton(
-                                onClick = { selectedCards.clear() }
-                            ) {
-                                Text("取消全選", fontSize = 12.sp)
-                            }
-
-                            Button(
-                                onClick = { showMoveCardsDialog = true },
-                                enabled = selectedCards.isNotEmpty() && decks.isNotEmpty(),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DriveFileMove,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text("移動", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            Button(
-                                onClick = { showBulkDeleteConfirm = true },
-                                enabled = selectedCards.isNotEmpty(),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.testTag("bulk_delete_confirm_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text("刪除", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -755,11 +696,13 @@ fun CardListScreen(
                         ReorderableItem(
                             state = cardReorderState,
                             key = card.id
-                        ) {
+                        ) { dragging ->
+                            Surface(shape=RoundedCornerShape(18.dp),shadowElevation=if(dragging)12.dp else 0.dp,color=if(dragging)MaterialTheme.colorScheme.surfaceVariant else Color.Transparent){
                             CardListItem(
                                 card = card,
                                 isMultiSelectMode = isMultiSelectMode,
                                 isSelected = isSelected,
+                                onLongClick = {isMultiSelectMode=true;if(!selectedCards.contains(card))selectedCards.add(card)},
                                 onToggleSelect = {
                                     if (isSelected) selectedCards.remove(card) else selectedCards.add(card)
                                 },
@@ -771,7 +714,7 @@ fun CardListScreen(
                                 showReorder = dragReorderEnabled,
                                 highlighted = highlightedCardId == card.id,
                                 dragHandleModifier = Modifier.draggableHandle()
-                            )
+                            )}
                         }
                     }
                     item {
@@ -789,6 +732,7 @@ private fun CardListItem(
     isMultiSelectMode: Boolean,
     isSelected: Boolean,
     onToggleSelect: () -> Unit,
+    onLongClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     onDeleteCard: () -> Unit,
     onEditCard: () -> Unit,
@@ -799,10 +743,10 @@ private fun CardListItem(
     dragHandleModifier: Modifier = Modifier
 ) {
     var menu by remember { mutableStateOf(false) }
-    Surface(shape = RoundedCornerShape(12.dp), color = if (isSelected || highlighted) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, modifier = Modifier.fillMaxWidth().clickable(onClick = { if (isMultiSelectMode) onToggleSelect() else onEditCard() })) {
+    Surface(shape = RoundedCornerShape(12.dp), color = if (isSelected || highlighted) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, modifier = Modifier.fillMaxWidth().combinedClickable(onLongClick=onLongClick,onClick = { if (isMultiSelectMode) onToggleSelect() else onEditCard() })) {
         Column(Modifier.padding(horizontal = 4.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isMultiSelectMode) Checkbox(checked = isSelected, onCheckedChange = { onToggleSelect() })
+                if (isMultiSelectMode) IconButton(onClick=onToggleSelect,modifier=Modifier.padding(start=8.dp,end=8.dp).size(44.dp)){Icon(if(isSelected)Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,"選取單字",tint=if(isSelected)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)}
                 Column(Modifier.weight(1f)) {
                     Text(card.word, style = MaterialTheme.typography.headlineSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif))
                     Text(listOf(card.partOfSpeech, card.phonetic).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -821,7 +765,7 @@ private fun CardListItem(
             }
             Text(OcrWordParser.cleanDefinition(card.definition), style = MaterialTheme.typography.bodyLarge)
             if (card.exampleSentence.isNotBlank()) Text(card.exampleSentence, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f), modifier = Modifier.padding(top = 8.dp))
+            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f), modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

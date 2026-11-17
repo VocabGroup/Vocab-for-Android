@@ -128,7 +128,9 @@ fun SettingsScreen(
     onExportCsv: (Uri) -> Unit,
     onImportBackup: (Uri) -> Unit,
     onClearAllData: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenQualityCheck:()->Unit={},
+    onOpenCalendar:()->Unit={}
 ) {
     var settingsPage by rememberSaveable { mutableStateOf("設定") }
     androidx.activity.compose.BackHandler(enabled = settingsPage != "設定") { settingsPage = "設定" }
@@ -360,6 +362,7 @@ fun SettingsScreen(
         ) {
             if (settingsPage == "設定") item { com.example.ui.components.EditorialHeading("依照你的方式學習", "外觀、AI、朗讀與資料，集中在這裡。") }
             if (settingsPage == "設定") {
+                item{TextButton(onClick=onOpenQualityCheck){Text("單字資料品質檢查")};TextButton(onClick=onOpenCalendar){Text("學習日曆")}}
                 items(listOf(
                     "外觀" to "跟隨系統、亮色與暗色",
                     "學習" to "每日目標與複習",

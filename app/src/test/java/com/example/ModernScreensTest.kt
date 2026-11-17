@@ -27,6 +27,31 @@ import org.robolectric.annotation.GraphicsMode
 @Config(qualifiers = RobolectricDeviceQualifiers.Pixel8, sdk = [36])
 class ModernScreensTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun incomingSharedFolderIsReadOnlyUntilGetIsPressed(){
+        var acquired=0
+        val folder=com.example.data.importer.SharedFolder("朋友單字","日常","","#DBEEFA",listOf(Flashcard(deckId=0,word="journey",definition="旅程")))
+        compose.setContent{MyApplicationTheme{SharedMaterialPreview("fixture",{}, {acquired++},load={com.example.data.importer.ReceivedShare(listOf(folder),Long.MAX_VALUE,"folder","朋友單字")})}}
+        compose.onNodeWithText("journey").assertIsDisplayed()
+        compose.onNodeWithContentDescription("單字操作").assertDoesNotExist()
+        compose.onNodeWithText("journey").assertHasNoClickAction()
+        compose.onNodeWithText("取得").performClick()
+        compose.runOnIdle{assertEquals(1,acquired)}
+        compose.onRoot().captureRoboImage("build/outputs/shared-folder-360.png")
+    }
+    @Test fun customCoverColorCanBePickedWithoutSavingUntilConfirmed(){
+        val context=androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val store=com.example.data.settings.CourseCoverStore(context);store.clear();store.set("日常","#DBEEFA")
+        var saved=0
+        compose.setContent{MyApplicationTheme{CourseCoverDialog("日常",store,{}, {saved++})}}
+        compose.onNodeWithContentDescription("自訂封面顏色").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("cover_color_hex").performTextClearance()
+        compose.onNodeWithTag("cover_color_hex").performTextInput("#123ABC")
+        compose.onNodeWithText("使用此顏色").performClick()
+        compose.runOnIdle{assertEquals("#DBEEFA",store.value("日常"))}
+        compose.onNodeWithText("晴").assertDoesNotExist()
+        compose.onNodeWithText("儲存").performClick()
+        compose.runOnIdle{assertEquals("#123ABC",store.value("日常"));assertEquals(1,saved)}
+    }
     private val note = GrammarNote(id = 1, title = "too … to", course = "高中第一冊", folder = "L1", summary = "太…而無法…", structure = "too + adjective + to + V")
 
     @Test fun grammarHomeLight() {

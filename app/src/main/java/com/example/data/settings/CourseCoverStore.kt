@@ -20,15 +20,38 @@ class CourseCoverStore(private val context: Context) {
     fun value(course: String): String = preferences.getString(key(course), "preset:sky") ?: "preset:sky"
     fun file(value: String): File? = value.removePrefix("file:").takeIf { value.startsWith("file:") && it.matches(Regex("[a-f0-9]{64}-[0-9]+\\.jpg")) }?.let { File(directory, it).takeIf(File::exists) }
     fun set(course: String, value: String) {
-        require(value in listOf("preset:sky", "preset:ice", "preset:cornflower", "preset:sea") || file(value) != null)
+        require(validColor(value) || file(value) != null)
         val previous = this.value(course)
-        check(preferences.edit().putString(key(course), value).commit()) { "封面無法儲存" }
+        check(preferences.edit().putString(key(course), value).putStringSet("course_names", courses().plus(course).toSet()).commit()) { "封面無法儲存" }
         if (previous != value) file(previous)?.delete()
     }
     fun rename(old: String, new: String) {
         if (old == new) return
         val value = value(old)
-        check(preferences.edit().remove(key(old)).putString(key(new), value).commit())
+        check(preferences.edit().remove(key(old)).putString(key(new), value).putStringSet("course_names", (courses()-old+new).toSet()).commit())
+    }
+    fun courses(): List<String> = preferences.getStringSet("course_names", emptySet()).orEmpty().sorted()
+    fun remove(course:String){val old=value(course);check(preferences.edit().remove(key(course)).putStringSet("course_names",(courses()-course).toSet()).commit());file(old)?.delete()}
+    fun register(course: String) { require(course.isNotBlank() && course.length<=200); check(preferences.edit().putStringSet("course_names",courses().plus(course).toSet()).commit()) }
+    fun exportDesign(): org.json.JSONArray = org.json.JSONArray().apply { courses().forEach { course -> val cover=value(course);put(org.json.JSONObject().put("name",course).put("cover",if(file(cover)!=null)"data:image/jpeg;base64,"+android.util.Base64.encodeToString(file(cover)!!.readBytes(),android.util.Base64.NO_WRAP) else cover)) } }
+    fun validateDesign(array:org.json.JSONArray?){
+        if(array==null)return
+        require(array.length()<=1000){"備份課程過多"}
+        for(i in 0 until array.length()){
+            val item=array.getJSONObject(i);val name=item.getString("name");val cover=item.getString("cover")
+            require(name.isNotBlank()&&name.length<=200){"備份課程名稱無效"}
+            if(!validColor(cover)){
+                require(cover.startsWith("data:image/jpeg;base64,")&&cover.length<=800_000){"備份封面無效"}
+                val bytes=android.util.Base64.decode(cover.substringAfter(','),android.util.Base64.DEFAULT)
+                val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
+                require(bounds.outMimeType=="image/jpeg"&&bounds.outWidth in 1..4096&&bounds.outHeight in 1..4096){"備份圖片無效"}
+            }
+        }
+    }
+    fun restoreDesign(array: org.json.JSONArray?) { if(array==null)return;require(array.length()<=1000);for(i in 0 until array.length()){val item=array.getJSONObject(i);val name=item.getString("name");require(name.isNotBlank()&&name.length<=200);val value=item.getString("cover");if(validColor(value))set(name,value) else if(value.startsWith("data:image/jpeg;base64,")&&value.length<=800_000){val bytes=android.util.Base64.decode(value.substringAfter(','),android.util.Base64.DEFAULT);val options=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeByteArray(bytes,0,bytes.size,options);require(options.outWidth in 1..4096&&options.outHeight in 1..4096);val output=File(directory,"${key(name)}-${System.nanoTime()}.jpg");output.writeBytes(bytes);set(name,"file:${output.name}")}} }
+    companion object {
+        val PRESETS=listOf("sky","ice","cornflower","sea","lavender","rose","mint","sage","sand","peach","slate","lemon")
+        fun validColor(value:String)=value.matches(Regex("#[a-fA-F0-9]{6}")) || value.removePrefix("preset:") in PRESETS && value.startsWith("preset:")
     }
     fun clear() { preferences.edit().clear().apply(); directory.listFiles()?.forEach { it.delete() } }
     suspend fun preparePhoto(course: String, uri: Uri): String = withContext(Dispatchers.IO) {

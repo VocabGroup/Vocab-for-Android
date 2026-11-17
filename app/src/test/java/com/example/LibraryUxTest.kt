@@ -29,12 +29,31 @@ import java.io.File
 @Config(qualifiers="w412dp-h892dp-420dpi",sdk=[36])
 class LibraryUxTest {
  @get:Rule val compose=createAndroidComposeRule<ComponentActivity>()
+ @Test fun activeQuizHidesParentPracticeTabsSoTheyCannotOverlapStatusBar(){
+  compose.setContent{MyApplicationTheme{MainScreen(3,{}, {},{}, {},{Text("作答內容")},showBottomNavigation=false)}}
+  compose.onNodeWithText("作答內容").assertIsDisplayed()
+  compose.onNodeWithText("翻卡學習").assertDoesNotExist()
+  compose.onNodeWithTag("nav_tab_quiz").assertDoesNotExist()
+ }
+ @Test fun courseDeleteRequiresConfirmationAndSupportsEmptyCourses(){
+  val store=com.example.data.settings.CourseCoverStore(compose.activity);store.clear();store.set("空課程","#DBEEFA");var deleted=""
+  compose.setContent{MyApplicationTheme{FoldersManagementScreen(emptyList(),emptyList(),{_,_,_,_->},{},{},onOpenCardList={},onJumpToStudy={},onJumpToQuiz={},onDeleteCourse={deleted=it;Result.success(Unit)})}}
+  compose.onNodeWithContentDescription("編輯課程 空課程").performClick()
+  compose.onNodeWithText("刪除課程").assertIsDisplayed().performClick()
+  compose.runOnIdle{assertEquals("",deleted)}
+  compose.waitUntil(10000){compose.onAllNodesWithText("刪除課程「空課程」？").fetchSemanticsNodes().isNotEmpty()}
+  compose.onAllNodes(isDialog()).onLast().captureRoboImage("build/outputs/delete-course-confirm.png")
+  compose.onNodeWithText("刪除課程「空課程」？").assertIsDisplayed()
+  compose.onAllNodesWithText("刪除課程").onLast().performClick()
+  compose.waitUntil(10000){deleted=="空課程"}
+  compose.onNodeWithTag("course_空課程").assertDoesNotExist()
+ }
  @Test fun draggingGlassBubbleSwitchesPagesAndKeepsTapNavigation(){
   var page by mutableIntStateOf(0)
-  compose.setContent{MyApplicationTheme{Surface{MainScreen(page,{page=it},{Text("今日內容")},{Text("教材內容")},{Text("翻卡內容")},{Text("測驗內容")})}}}
+  compose.setContent{MyApplicationTheme{Surface{MainScreen(page,{page=it},{Text("今日內容")},{Text("教材內容")},{Text("翻卡內容")},{Text("測驗內容")},libraryToolContent={Text("文章內容")})}}}
   compose.onNodeWithTag("glass_drag_surface").performTouchInput { swipe(androidx.compose.ui.geometry.Offset(width*.125f,centerY),androidx.compose.ui.geometry.Offset(width*.625f,centerY),500) }
-  compose.onNodeWithText("翻卡內容").assertIsDisplayed()
-  compose.runOnIdle{assertEquals(2,page)}
+  compose.onNodeWithText("文章內容").assertIsDisplayed()
+  compose.runOnIdle{assertEquals(4,page)}
   compose.onNodeWithTag("glass_drag_surface").performTouchInput { swipe(androidx.compose.ui.geometry.Offset(width*.625f,centerY),androidx.compose.ui.geometry.Offset(width*.375f,centerY),500) }
   compose.onNodeWithText("教材內容").assertIsDisplayed()
   compose.onNodeWithTag("nav_tab_home").performClick()
@@ -42,14 +61,14 @@ class LibraryUxTest {
  }
  @Test fun courseGroupsOpenInlineAndCourseShareSelectsOnlyItsFolders(){
   val decks=listOf(Deck(id=1,name="搜尋單字",category="日常"),Deck(id=2,name="生活會話",category="日常"),Deck(id=3,name="第一課",category="英文"))
-  compose.setContent{MyApplicationTheme{FoldersManagementScreen(decks,emptyList(),{_,_,_,_->},{},{},onOpenCardList={},onJumpToStudy={},onJumpToQuiz={})}}
+  compose.setContent{MyApplicationTheme{FoldersManagementScreen(decks,emptyList(),{_,_,_,_->},{},{},onOpenCardList={},onJumpToStudy={},onJumpToQuiz={},sharePublisher={raw->org.junit.Assert.assertEquals("course",org.json.JSONObject(raw).getString("kind"));com.example.data.importer.PublishedShare("https://vocab-adam.pages.dev/share#"+"a".repeat(48),"a".repeat(48),"test",System.currentTimeMillis()+604800000)})}}
   compose.onNodeWithText("搜尋單字").assertDoesNotExist()
   compose.onNodeWithTag("course_日常").performClick()
   compose.onNodeWithText("搜尋單字").assertIsDisplayed()
   compose.onNodeWithText("第一課").assertDoesNotExist()
   compose.onRoot().captureRoboImage("build/outputs/library-ux.png")
   compose.onNodeWithContentDescription("分享課程").performClick()
-  compose.onNodeWithText("已選 2 個資料夾 · 0 個單字").assertIsDisplayed()
+  compose.waitUntil(10000){compose.onAllNodesWithText("分享／下載 JSON").fetchSemanticsNodes().isNotEmpty()};compose.onNodeWithContentDescription("分享 QR Code").assertIsDisplayed()
  }
  @Test fun fileImportOpensPreviewEvenAfterHeaderIsScrolledAway(){
   val decks=(1..30).map{Deck(id=it.toLong(),name="資料夾$it",category="日常")};var imports=0;var attempts=0
@@ -80,12 +99,12 @@ class LibraryUxTest {
  @Test fun fourTabNavigationRetainsQuizArticlesAndAi(){
   var page by mutableIntStateOf(0);var ai=0
   compose.setContent{MyApplicationTheme{Surface{MainScreen(page,{page=it},{Text("今日內容")},{Text("教材內容")},{Text("翻卡內容")},{Text("測驗內容")},libraryToolContent={Text("文章內容")},onOpenAssistant={ai++})}}}
-  compose.onNodeWithTag("nav_tab_study").performClick()
-  compose.onNodeWithTag("nav_tab_quiz").performClick()
+  compose.onNodeWithTag("nav_tab_articles").performClick()
+  compose.onNodeWithText("文章內容").assertIsDisplayed()
+  compose.runOnIdle{page=3}
   compose.onNodeWithText("測驗內容").assertIsDisplayed()
   compose.onNodeWithTag("nav_tab_folders").performClick()
-  compose.onNodeWithTag("nav_tab_library_tool").performClick()
-  compose.onNodeWithText("文章內容").assertIsDisplayed()
+  compose.onNodeWithText("教材內容").assertIsDisplayed()
   compose.onNodeWithTag("nav_tab_ai").performClick()
   compose.runOnIdle{assertEquals(1,ai)}
   compose.onRoot().captureRoboImage("build/outputs/glass-ux.png")

@@ -2,6 +2,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.layout.PaddingValues
 import com.example.ui.components.ModernTonalButton as FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.CollectionsBookmark
@@ -109,8 +110,11 @@ fun DashboardScreen(
     onOpenStudyCalendar: () -> Unit,
     onOpenQualityCheck: () -> Unit,
     onOpenAssistant: () -> Unit = {},
+    onOpenLibrary: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val recentContext=androidx.compose.ui.platform.LocalContext.current
+    val recentDecks=com.example.data.settings.RecentDeckStore(recentContext).ids().mapNotNull { id->decks.firstOrNull{it.id==id} }
     var showAddFolderDialog by remember { mutableStateOf(false) }
     var pendingFolderAction by remember { mutableStateOf<String?>(null) } // "REVIEW" or "GAME"
     val courses = remember(decks) { decks.map { it.category }.filter(String::isNotBlank).distinct() }
@@ -267,13 +271,6 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onOpenAssistant) {
-                        Icon(
-                            imageVector = Icons.Filled.AutoAwesome,
-                            contentDescription = "Vocab AI",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
                     IconButton(onClick = onOpenSettings) {
                         Box {
                             Icon(
@@ -319,45 +316,13 @@ fun DashboardScreen(
                         Text("$dueCount 字", style = MaterialTheme.typography.displaySmall)
                         LinearProgressIndicator(progress = { progress.goalFraction }, modifier = Modifier.fillMaxWidth().height(5.dp))
                         Text("待複習 $dueCount 張 · ${progress.dailyXp} XP", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(onClick = { pendingFolderAction = "REVIEW" }, enabled = totalCount > 0, shape = RoundedCornerShape(26.dp), modifier = Modifier.fillMaxWidth().height(52.dp).testTag("start_review_button")) { Text("開始今天的複習") }
+                        Button(onClick = onOpenLibrary, enabled = true, shape = RoundedCornerShape(26.dp), modifier = Modifier.fillMaxWidth().height(52.dp).testTag("start_review_button")) { Text("開始今天的複習") }
                     }
                 }
             }
-            (dueCards.firstOrNull() ?: allCards.firstOrNull())?.let { word ->
-                item(key = "featured_word") {
-                    Surface(onClick = { onSelectDeck(word.deckId); onOpenCardList() }, shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                        Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            EditorialContext("來自你的教材", decks.firstOrNull { it.id == word.deckId }?.category)
-                            Text(word.word, style = MaterialTheme.typography.headlineLarge.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif), color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text(word.definition, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text(listOf(word.partOfSpeech, word.phonetic).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                    }
-                }
-            }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FilledTonalButton(onClick = onOpenAddCard, modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("新增單字") }
-                    FilledTonalButton(onClick = onOpenPhotoOcr, modifier = Modifier.weight(1f).height(50.dp).testTag("tool_photo_ocr"), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.DocumentScanner, null); Spacer(Modifier.width(6.dp)); Text("掃描匯入") }
-                }
-            }
-            item { ModernListRow("匯入單字集", "連結、檔案或貼上文字", Icons.Default.Download, onOpenExternalImport, modifier = Modifier.testTag("tool_external_import")) }
-            item { ModernListRow("測驗", "選擇資料夾，練習記憶與應用", Icons.Default.Extension, { pendingFolderAction = "GAME" }, modifier = Modifier.testTag("tool_quiz_games")) }
-            item { CalmSectionHeader("我的單字庫", action = { IconButton(onClick = { showAddFolderDialog = true }, modifier = Modifier.testTag("dashboard_add_folder_button")) { Icon(Icons.Default.Add, "新增資料夾") } }) }
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { FilterChip(selected = selectedCourseFilter == null, onClick = { selectedCourseFilter = null }, label = { Text("全部") }) }
-                    items(courses) { course -> FilterChip(selected = selectedCourseFilter == course, onClick = { selectedCourseFilter = course }, label = { Text(course) }) }
-                }
-            }
-            item { ModernListRow("所有單字", "$totalCount 張 · 已精通 $masteredCount 張", Icons.Default.CollectionsBookmark, { onSelectDeck(null); onOpenCardList() }) }
-            items(decks.filter { selectedCourseFilter == null || it.category == selectedCourseFilter }) { deck ->
-                ModernListRow(deck.name, "${deck.category} · ${allCards.count { it.deckId == deck.id }} 張", Icons.Default.Folder, { onSelectDeck(deck.id); onOpenCardList() })
-            }
-            item { CalmSectionHeader("學習工具") }
-            item { ModernListRow("文章閱讀", "用熟悉的單字練習閱讀", Icons.AutoMirrored.Filled.MenuBook, { pendingFolderAction = "READING" }) }
-            item { ModernListRow("學習日曆", "檢視每日學習紀錄", Icons.Default.CalendarMonth, onOpenStudyCalendar) }
-            item { ModernListRow("資料檢查", "補齊缺漏與修正資料", Icons.AutoMirrored.Filled.FactCheck, onOpenQualityCheck) }
+            item { CalmSectionHeader("最近學習", action={IconButton(onClick=onOpenLibrary){Icon(Icons.Default.ChevronRight,"前往教材庫")}}) }
+            if(recentDecks.isEmpty())item { Text("開啟教材後，最近學習的資料夾會顯示在這裡。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) }
+            items(recentDecks,key={it.id}) { deck -> ModernListRow(deck.name,"${deck.category} · ${allCards.count{it.deckId==deck.id}} 字",Icons.Default.Folder,{onSelectDeck(deck.id);onOpenCardList()}) }
             item { StatisticsChart(totalCards = totalCount, masteredCards = masteredCount, dueCards = dueCount, logs = logs) }
         }
     }

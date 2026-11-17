@@ -1,6 +1,8 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.example.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.text.KeyboardActions
@@ -173,12 +176,14 @@ fun ModernCollectionRow(
     onShare: (() -> Unit)? = null,
     dragModifier: Modifier? = null,
     primaryActionModifier: Modifier = Modifier,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    selectionMode: Boolean = false
 ) {
     var menu by remember { mutableStateOf(false) }
     val primaryAction = when (mode) { "learn" -> onLearn; "quiz" -> onQuiz; else -> onManage }
     val separator = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .6f)
-    Surface(onClick = primaryAction, enabled = mode == "manage" || count > 0, color = Color.Transparent, modifier = modifier.then(primaryActionModifier).fillMaxWidth().drawBehind { drawLine(separator, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) }) {
+    Surface(color = Color.Transparent, modifier = modifier.then(primaryActionModifier).combinedClickable(enabled=mode=="manage"||count>0,onClick=primaryAction,onLongClick=onLongClick).fillMaxWidth().drawBehind { drawLine(separator, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) }) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Surface(shape = RoundedCornerShape(12.dp), color = Color.Transparent) {
                 Icon(if (grammar) Icons.Default.MenuBook else Icons.Default.Folder, null, Modifier.padding(9.dp).size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -195,7 +200,7 @@ fun ModernCollectionRow(
                 }
             }
             dragModifier?.let { Icon(Icons.Default.DragHandle, "拖曳排序", it.size(28.dp).padding(3.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Box {
+            if(!selectionMode) Box {
                 IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.MoreVert, "更多操作") }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("管理") }, onClick = { menu = false; onManage() })
@@ -245,13 +250,15 @@ fun ModernAlertDialog(
     properties: DialogProperties = DialogProperties()
 ) {
     Dialog(onDismissRequest = onDismissRequest, properties = DialogProperties(dismissOnBackPress = properties.dismissOnBackPress, dismissOnClickOutside = properties.dismissOnClickOutside, securePolicy = properties.securePolicy, usePlatformDefaultWidth = false, decorFitsSystemWindows = properties.decorFitsSystemWindows)) {
-        BoxWithConstraints(Modifier.fillMaxSize().clickable(onClick = onDismissRequest).safeDrawingPadding().imePadding().padding(12.dp), contentAlignment = Alignment.BottomCenter) {
+        BoxWithConstraints(Modifier.fillMaxSize().clickable(onClick = onDismissRequest).safeDrawingPadding().imePadding().padding(12.dp), contentAlignment = Alignment.Center) {
             val compact = maxHeight < 420.dp
             Surface(modifier = modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 640.dp).clickable(onClick = {}), shape = shape, color = containerColor, tonalElevation = tonalElevation) {
-                Column(Modifier.padding(if(compact)16.dp else 22.dp), verticalArrangement = Arrangement.spacedBy(if(compact)10.dp else 16.dp)) {
-                    Surface(Modifier.align(Alignment.CenterHorizontally).size(36.dp, 4.dp), shape = RoundedCornerShape(2.dp), color = MaterialTheme.colorScheme.outlineVariant) {}
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     icon?.let { CompositionLocalProvider(LocalContentColor provides iconContentColor) { it() } }
-                    title?.let { Box(Modifier.heightIn(max=if(compact)72.dp else 120.dp).verticalScroll(rememberScrollState())) { CompositionLocalProvider(LocalContentColor provides titleContentColor) { ProvideTextStyle(MaterialTheme.typography.titleLarge) { it() } } } }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.Top) {
+                        Box(Modifier.weight(1f).padding(top=7.dp).heightIn(max=120.dp).verticalScroll(rememberScrollState())) { title?.let { CompositionLocalProvider(LocalContentColor provides titleContentColor) { ProvideTextStyle(MaterialTheme.typography.titleLarge.copy(fontSize=20.sp)) { it() } } } }
+                        IconButton(onClick=onDismissRequest,modifier=Modifier.requiredSize(44.dp)) { Icon(Icons.Default.Close,"關閉",Modifier.size(24.dp)) }
+                    }
                     text?.let { Box(Modifier.weight(1f, fill = false)) { CompositionLocalProvider(LocalContentColor provides textContentColor) { ProvideTextStyle(MaterialTheme.typography.bodyMedium) { it() } } } }
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) { dismissButton?.invoke(); confirmButton() }
                 }

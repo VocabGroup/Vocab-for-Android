@@ -35,7 +35,8 @@ fun ImportDestinationSelector(
     decks: List<Deck>,
     selectedDeckId: Long?,
     onDeckSelected: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact:Boolean=false
 ) {
     val courses = remember(decks) { decks.map { it.category }.distinct() }
     var selectedCourse by remember(decks, selectedDeckId) {
@@ -63,7 +64,7 @@ fun ImportDestinationSelector(
             modifier = Modifier.weight(1f)
         ) {
             ImportDropdownAnchor(
-                label = "選擇課程",
+                label = if(compact)"" else "選擇課程",
                 value = selectedCourse.orEmpty(),
                 modifier = Modifier.menuAnchor().fillMaxWidth()
             )
@@ -86,7 +87,7 @@ fun ImportDestinationSelector(
             modifier = Modifier.weight(1f)
         ) {
             ImportDropdownAnchor(
-                label = "選擇資料夾",
+                label = if(compact)"" else "選擇資料夾",
                 value = courseDecks.firstOrNull { it.id == selectedDeckId }?.name.orEmpty(),
                 modifier = Modifier.menuAnchor().fillMaxWidth()
             )
@@ -110,14 +111,14 @@ private fun ImportDropdownAnchor(
 ) {
     Box(
         modifier = modifier
-            .heightIn(min = 64.dp)
+            .heightIn(min = if(label.isEmpty())48.dp else 64.dp)
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                if(label.isNotEmpty())Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,

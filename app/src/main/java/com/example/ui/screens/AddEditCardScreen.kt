@@ -116,6 +116,7 @@ class EditableCardState(
 fun AddEditCardScreen(
     editingCard: Flashcard?,
     initialFocusCardId: Long? = null,
+    preferredDeckId:Long?=null,
     initialSharedText: String? = null,
     allCards: List<Flashcard>,
     decks: List<Deck>,
@@ -143,7 +144,7 @@ fun AddEditCardScreen(
         return
     }
 
-    val initialDeckId = editingCard?.deckId ?: decks.first().id
+    val initialDeckId = editingCard?.deckId ?: preferredDeckId?.takeIf{id->decks.any{it.id==id}} ?: decks.first().id
     val initialDeck = decks.firstOrNull { it.id == initialDeckId }
 
     var selectedDeckId by remember { mutableLongStateOf(initialDeckId) }
@@ -248,8 +249,8 @@ fun AddEditCardScreen(
     var sharedTextApplied by remember(initialSharedText) { mutableStateOf(false) }
     var saveStatus by remember { mutableStateOf("所有變更會自動儲存") }
     fun saveUnfinishedDraft(ownerDeckId:Long=selectedDeckId){
-        val pending=editableCards.filter{it.originalId==0L&&(it.word.isNotBlank()||it.definition.isNotBlank()||it.exampleSentence.isNotBlank())}
-        val rows=JSONArray(pending.map{JSONObject().put("word",it.word).put("definition",it.definition).put("partOfSpeech",it.partOfSpeech).put("phonetic",it.phonetic).put("exampleSentence",it.exampleSentence).put("exampleTranslation",it.exampleTranslation)})
+        val pending=editableCards.filter{(it.originalId==0L||it.word.isBlank())&&(it.word.isNotBlank()||it.definition.isNotBlank()||it.exampleSentence.isNotBlank()||it.phonetic.isNotBlank()||it.exampleTranslation.isNotBlank()||it.partOfSpeech.isNotBlank())}
+        val rows=JSONArray(pending.map{JSONObject().put("originalId",it.originalId).put("word",it.word).put("definition",it.definition).put("partOfSpeech",it.partOfSpeech).put("phonetic",it.phonetic).put("exampleSentence",it.exampleSentence).put("exampleTranslation",it.exampleTranslation)})
         draftPreferences.edit().apply{if(pending.isEmpty())remove("deck-$ownerDeckId") else putString("deck-$ownerDeckId",rows.toString())}.apply()
     }
     DisposableEffect(selectedDeckId){val owner=selectedDeckId;onDispose{if(isInitialized)saveUnfinishedDraft(owner)}}
@@ -294,7 +295,7 @@ fun AddEditCardScreen(
                 definition = finalDef,
                 exampleSentence = finalSentence,
                 exampleTranslation = item.exampleTranslation.ifBlank {
-                    dict?.exampleTranslation.orEmpty()
+                    dict?.takeIf{it.exampleSentence.trim()==finalSentence.trim()}?.exampleTranslation.orEmpty()
                 },
                 sortOrder = topSortOrder - index
             )
@@ -320,7 +321,21 @@ fun AddEditCardScreen(
     LaunchedEffect(selectedDeckId) {
         isInitialized = false
         loadCardsForDeck(selectedDeckId)
-        runCatching{val raw=draftPreferences.getString("deck-$selectedDeckId",null);if(raw!=null){val rows=JSONArray(raw);for(index in 0 until rows.length()){val row=rows.getJSONObject(index);val word=row.optString("word");if(word.isBlank()||editableCards.none{it.word.equals(word,true)}){editableCards.add(EditableCardState(initialWord=word,initialDef=row.optString("definition"),initialPos=row.optString("partOfSpeech"),initialPhonetic=row.optString("phonetic"),initialSentence=row.optString("exampleSentence"),initialTranslation=row.optString("exampleTranslation")))}};saveStatus="已恢復未完成草稿"}}
+        runCatching{
+            val raw=draftPreferences.getString("deck-$selectedDeckId",null)
+            if(raw!=null){
+                val rows=JSONArray(raw)
+                for(index in 0 until rows.length()){
+                    val row=rows.getJSONObject(index);val word=row.optString("word");val originalId=row.optLong("originalId",0)
+                    val restored=EditableCardState(originalId=originalId,initialWord=word,initialDef=row.optString("definition"),initialPos=row.optString("partOfSpeech"),initialPhonetic=row.optString("phonetic"),initialSentence=row.optString("exampleSentence"),initialTranslation=row.optString("exampleTranslation"))
+                    val existing=editableCards.indexOfFirst{originalId!=0L&&it.originalId==originalId}
+                    if(existing>=0)editableCards[existing]=restored
+                    else if(originalId==0L&&(word.isBlank()||editableCards.none{it.word.equals(word,true)}))editableCards.add(restored)
+                }
+                saveStatus="已恢復未完成草稿"
+            }
+        }
+
         if (!sharedTextApplied && !initialSharedText.isNullOrBlank()) {
             val sharedWords = Regex("[A-Za-z]+(?:['’-][A-Za-z]+)*")
                 .findAll(initialSharedText)
@@ -425,7 +440,7 @@ fun AddEditCardScreen(
                 expandedHeight = 48.dp,
                 title = {
                     Text(
-                        text = if (editingCard == null) "新增單字卡" else "編輯單字卡",
+                        text = decks.firstOrNull{it.id==selectedDeckId}?.let{"${it.category} › ${it.name}"}?:"編輯單字",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
@@ -537,29 +552,11 @@ fun AddEditCardScreen(
                         modifier = Modifier.padding(vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "儲存位置",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = saveStatus,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                        }
-
+                        Text(saveStatus,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             ImportDestinationSelector(
                                 decks = decks,
+                                compact = true,
                                 selectedDeckId = selectedDeckId,
                                 onDeckSelected = { deckId ->
                                     decks.firstOrNull { it.id == deckId }?.let { selectedCourse = it.category }

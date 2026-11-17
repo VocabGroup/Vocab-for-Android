@@ -296,7 +296,12 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
 
     fun selectDeck(deckId: Long?) {
         _selectedDeckId.value = deckId
+        deckId?.let { com.example.data.settings.RecentDeckStore(getApplication()).open(it) }
     }
+
+    suspend fun transferSelectedWords(ids:List<Long>,target:Long,copy:Boolean,overwrite:Boolean):Result<com.example.data.WorkspaceTransferResult> = runCatching { com.example.data.WorkspaceTransfers(db).words(ids,target,copy,overwrite) }
+    suspend fun transferSelectedFolders(ids:List<Long>,course:String,copy:Boolean,overwrite:Boolean):Result<com.example.data.WorkspaceTransferResult> = runCatching { com.example.data.WorkspaceTransfers(db).folders(ids,course,copy,overwrite) }
+    suspend fun deleteCourseAndContents(course:String):Result<Unit> = runCatching { com.example.data.WorkspaceTransfers(db).deleteCourse(course) }
 
     fun saveGrammarNote(note: GrammarNote, onComplete: (Long) -> Unit = {}) {
         viewModelScope.launch {
@@ -1660,6 +1665,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             runCatching {
                 repository.clearAllData()
+                com.example.data.settings.RecentDeckStore(getApplication()).clear()
                 com.example.data.settings.CourseCoverStore(getApplication()).clear()
                 db.grammarQuestionDao().deleteAllQuestions()
                 db.grammarQuestionDao().deleteAllWeaknesses()

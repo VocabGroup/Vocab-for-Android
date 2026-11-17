@@ -29,19 +29,38 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
-fun FolderSharingPanel(decks:List<Deck>,cards:List<Flashcard>,course:String?,requestDeckId:Long?=null,onRequestHandled:()->Unit={},importRequested:Boolean=false,onImportRequestHandled:()->Unit={},onImport:suspend(List<SharedFolder>,String,Boolean)->Result<List<Long>>,onUndo:suspend(List<Long>)->Result<Unit>,externalUndoIds:List<Long> = emptyList(),requestCourse:String?=null,onCourseRequestHandled:()->Unit={},showActions:Boolean=true,importLinkRequested:Boolean=false,onLinkRequestHandled:()->Unit={},requestLink:String?=null,onRequestLinkHandled:()->Unit={},onOpenImported:((Long)->Unit)?=null){
+fun FolderSharingPanel(decks:List<Deck>,cards:List<Flashcard>,course:String?,requestDeckId:Long?=null,onRequestHandled:()->Unit={},importRequested:Boolean=false,onImportRequestHandled:()->Unit={},onImport:suspend(List<SharedFolder>,String,Boolean)->Result<List<Long>>,onUndo:suspend(List<Long>)->Result<Unit>,externalUndoIds:List<Long> = emptyList(),requestCourse:String?=null,onCourseRequestHandled:()->Unit={},showActions:Boolean=true,importLinkRequested:Boolean=false,onLinkRequestHandled:()->Unit={},requestLink:String?=null,onRequestLinkHandled:()->Unit={},onOpenImported:((Long)->Unit)?=null,publishShare:suspend(String)->PublishedShare=ShareLinks::publish){
     val context=LocalContext.current;val scope=rememberCoroutineScope()
     val receipts=remember{context.getSharedPreferences("share-receipts",android.content.Context.MODE_PRIVATE)}
     var incomingExpiry by remember{mutableLongStateOf(0L)}
     var sourceUrl by remember{mutableStateOf("")};var allowRepeat by remember{mutableStateOf(false)};var confirming by remember{mutableStateOf(false)}
     var successIds by remember{mutableStateOf<List<Long>>(emptyList())}
     var published by remember{mutableStateOf<PublishedShare?>(null)}
-    var confirmUpload by remember{mutableStateOf(false)}
     var showLinkImport by remember{mutableStateOf(false)}
     var inputUrl by remember{mutableStateOf("")}
     LaunchedEffect(importLinkRequested){if(importLinkRequested){showLinkImport=true;onLinkRequestHandled()}}
     var mode by remember{mutableStateOf("")};var selected by remember{mutableStateOf(setOf<Long>())};var includeNotes by remember{mutableStateOf(false)}
     var incoming by remember{mutableStateOf<List<SharedFolder>>(emptyList())};var checked by remember{mutableStateOf(setOf<Int>())};var target by remember{mutableStateOf("")};var skip by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var message by remember{mutableStateOf("")};var undo by remember{mutableStateOf<List<Long>>(emptyList())};var confirmUndo by remember{mutableStateOf(false)}
+    var shareTitle by remember{mutableStateOf("")}
+    var shareKind by remember{mutableStateOf("folder")}
+    fun exportJson():String=org.json.JSONObject(FolderShare.export(decks.filter{it.id in selected},cards,false)).put("kind",shareKind).put("title",shareTitle).toString()
+    fun shareJson(){scope.launch{
+        try{
+            val raw=withContext(Dispatchers.Default){exportJson()}
+            val file=withContext(Dispatchers.IO){File(context.cacheDir,"Vocab-${System.currentTimeMillis()}.vocab-share.json").apply{writeText(raw)}}
+            val uri=FileProvider.getUriForFile(context,"${context.packageName}.fileprovider",file)
+            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{type="application/json";putExtra(Intent.EXTRA_STREAM,uri);clipData=ClipData.newRawUri("Vocab",uri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)},"分享／下載 JSON"))
+        }catch(e:Exception){message=e.message?:"檔案分享失敗"}
+    }}
+    LaunchedEffect(mode){
+        if(mode=="direct"){
+            busy=true;message=""
+            try{require(selected.isNotEmpty()){"課程還沒有資料夾可分享"};published=publishShare(withContext(Dispatchers.Default){exportJson()});mode=""}
+            catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(e:Exception){message=e.message?:"分享失敗"}
+            finally{busy=false}
+        }
+    }
     LaunchedEffect(requestLink){
         if(requestLink!=null){
             inputUrl=requestLink;sourceUrl=requestLink;allowRepeat=false;confirming=false;showLinkImport=true;busy=true;message=""
@@ -52,8 +71,8 @@ fun FolderSharingPanel(decks:List<Deck>,cards:List<Flashcard>,course:String?,req
     }
     LaunchedEffect(externalUndoIds){undo=externalUndoIds}
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null)scope.launch{busy=true;runCatching{withContext(Dispatchers.IO){context.contentResolver.openInputStream(uri)!!.use{stream->val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192);var total=0;while(true){val n=stream.read(buffer);if(n<0)break;total+=n;require(total<=20*1024*1024){"分享檔超過 20 MB"};out.write(buffer,0,n)};FolderShare.parse(out.toString("UTF-8"))}}}.onSuccess{message="";sourceUrl="";incomingExpiry=0;confirming=false;incoming=it;checked=it.indices.toSet();target=course.orEmpty();mode="import"}.onFailure{message=it.message.orEmpty()};busy=false}}
-    LaunchedEffect(requestDeckId){if(requestDeckId!=null){selected=setOf(requestDeckId);includeNotes=false;message="";mode="export";onRequestHandled()}}
-    LaunchedEffect(requestCourse){if(requestCourse!=null){selected=decks.filter{it.category==requestCourse}.map{it.id}.toSet();includeNotes=false;message="";mode="export";onCourseRequestHandled()}}
+    LaunchedEffect(requestDeckId){if(requestDeckId!=null){selected=setOf(requestDeckId);includeNotes=false;message="";shareKind="folder";shareTitle=decks.firstOrNull{it.id==requestDeckId}?.name.orEmpty();mode="direct";onRequestHandled()}}
+    LaunchedEffect(requestCourse){if(requestCourse!=null){selected=decks.filter{it.category==requestCourse}.map{it.id}.toSet();includeNotes=false;message="";shareKind="course";shareTitle=requestCourse;mode="direct";onCourseRequestHandled()}}
     LaunchedEffect(importRequested){if(importRequested){picker.launch(arrayOf("application/json","text/plain","application/octet-stream"));onImportRequestHandled()}}
     Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
         if(showActions)Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedButton(enabled=!busy,onClick={selected=emptySet();mode="export"}){Text("選取／分享")};OutlinedButton(enabled=!busy,onClick={picker.launch(arrayOf("application/json","text/plain","application/octet-stream"))}){Text("匯入分享檔案")}}
@@ -62,14 +81,12 @@ fun FolderSharingPanel(decks:List<Deck>,cards:List<Flashcard>,course:String?,req
         if(message.isNotBlank())Text(message,style=MaterialTheme.typography.bodySmall)
     }
     if(confirmUndo)AlertDialog(onDismissRequest={if(!busy)confirmUndo=false},title={Text("撤回這次匯入？")},text={Text("僅移除這批新資料夾及之後的修改；原本資料不受影響。")},confirmButton={TextButton(enabled=!busy,onClick={scope.launch{busy=true;onUndo(undo).onSuccess{undo=emptyList();confirmUndo=false;message="已撤回匯入"}.onFailure{message=it.message.orEmpty()};busy=false}}){Text("撤回")}},dismissButton={TextButton(onClick={confirmUndo=false}){Text("取消")}})
-    if(mode.isNotEmpty())AlertDialog(onDismissRequest={if(!busy)mode=""},title={Text(if(mode=="export")"分享資料夾" else "匯入分享資料夾")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){if(message.isNotBlank())Text(message,color=MaterialTheme.colorScheme.error);Column(Modifier.heightIn(max=420.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
+    if(mode=="export"||mode=="import")AlertDialog(onDismissRequest={if(!busy)mode=""},title={Text(if(mode=="export")"分享資料夾" else "匯入分享資料夾")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){if(message.isNotBlank())Text(message,color=MaterialTheme.colorScheme.error);Column(Modifier.heightIn(max=420.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
         if(mode=="export"){
-            Text("只分享內容，不包含學習狀態、API Key 或聊天紀錄。")
             Text("已選 ${selected.size} 個資料夾 · ${cards.count{it.deckId in selected}} 個單字")
-            OutlinedButton(enabled=!busy&&selected.isNotEmpty(),onClick={confirmUpload=true}){Text("產生分享網址／QR Code")}
+            OutlinedButton(enabled=!busy&&selected.isNotEmpty(),onClick={shareKind="folder";shareTitle="分享資料夾";mode="direct"}){Text("產生分享網址／QR Code")}
             Row{TextButton(onClick={selected=decks.filter{course==null||it.category==course}.map{it.id}.toSet()}){Text("全選目前課程")};TextButton(onClick={selected=emptySet()}){Text("清除選取")}}
             decks.forEach{deck->Row{Checkbox(checked=deck.id in selected,onCheckedChange={selected=if(it)selected+deck.id else selected-deck.id});Text("${deck.category} · ${deck.name}（${cards.count{it.deckId==deck.id}} 字）")}}
-            Row{Checkbox(checked=includeNotes,onCheckedChange={includeNotes=it});Text("包含個人筆記（可能含私人資訊）")}
             Text("教材內容",style=MaterialTheme.typography.titleMedium)
             decks.filter{it.id in selected}.forEach{deck->ShareFolderPreview(SharedFolder(deck.name,deck.category,deck.description,deck.colorHex,cards.filter{it.deckId==deck.id}))}
         }else{
@@ -107,15 +124,18 @@ fun FolderSharingPanel(decks:List<Deck>,cards:List<Flashcard>,course:String?,req
         else if(!confirming){confirming=true}
         else{onImport(incoming.filterIndexed{i,_->i in checked},target,skip).onSuccess{undo=it;successIds=it;message="已匯入 ${it.size} 個資料夾，精熟度已重設";if(sourceUrl.isNotBlank())receipts.edit().putStringSet(sourceUrl,it.map{v->v.toString()}.toSet()).apply();mode="";confirming=false}.onFailure{message=it.message.orEmpty()}}
     }}catch(e:Exception){message=e.message.orEmpty()}finally{busy=false}}}){Text(if(busy)"處理中…" else if(mode=="export")"分享 JSON" else if(confirming)"確認匯入" else "下一步")}},dismissButton={TextButton(enabled=!busy,onClick={mode=""}){Text("取消")}})
-    if(confirmUpload)AlertDialog(onDismissRequest={if(!busy)confirmUpload=false},title={Text("上傳分享教材？")},text={Text("所選教材會上傳至 Vocab 雲端，任何持有連結的人都能讀取。7 天後自動刪除；不包含學習進度與 API Key。${if(includeNotes)"注意：你已選擇包含個人筆記。" else "個人筆記不會上傳。"}")},confirmButton={TextButton(enabled=!busy,onClick={scope.launch{busy=true;message="";try{val raw=withContext(Dispatchers.Default){FolderShare.export(decks.filter{it.id in selected},cards,includeNotes)};published=ShareLinks.publish(raw);mode="";confirmUpload=false}catch(e:Exception){message=e.message?:"分享失敗";confirmUpload=false}finally{busy=false}}}){Text(if(busy)"上傳中…" else "同意並產生連結")}},dismissButton={TextButton(enabled=!busy,onClick={confirmUpload=false}){Text("取消")}})
+    if(mode=="direct")AlertDialog(onDismissRequest={mode=""},title={Text(shareTitle.ifBlank{"分享教材"})},text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)){
+        if(busy){CircularProgressIndicator();Text("正在產生分享網址與 QR Code…")}
+        if(message.isNotBlank())Text(message,color=MaterialTheme.colorScheme.error)
+        TextButton(onClick=::shareJson){Text("分享／下載 JSON")}
+    }},confirmButton={if(!busy)TextButton(onClick={mode="";scope.launch{busy=true;try{published=publishShare(withContext(Dispatchers.Default){exportJson()})}catch(e:Exception){message=e.message?:"分享失敗";mode="direct"}finally{busy=false}}}){Text("重試")}})
     published?.let{share->val qr=remember(share.url){ShareLinks.qr(share.url)}
-        AlertDialog(onDismissRequest={if(!busy)published=null},title={Text("分享網址與 QR Code")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
+        AlertDialog(onDismissRequest={if(!busy)published=null},title={Text(shareTitle.ifBlank{"分享網址與 QR Code"})},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
             Image(qr.asImageBitmap(),"分享 QR Code",Modifier.fillMaxWidth().height(220.dp))
             Text(share.url,style=MaterialTheme.typography.bodySmall)
             Text("到期：${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(share.expiresAt))}")
-            Text("連結不會因讀取延長期限；關閉前可撤銷本次分享。",style=MaterialTheme.typography.bodySmall)
             TextButton(enabled=!busy,onClick={val clipboard=context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager;clipboard.setPrimaryClip(ClipData.newPlainText("Vocab",share.url));message="已複製分享網址"}){Text("複製網址")}
-            TextButton(enabled=!busy,onClick={scope.launch{busy=true;try{ShareLinks.revoke(share);published=null;message="已撤銷分享"}catch(e:Exception){message=e.message?:"撤銷失敗"}finally{busy=false}}}){Text("撤銷這個連結")}
+            TextButton(onClick=::shareJson){Text("分享／下載 JSON")}
             if(message.isNotBlank())Text(message)
         }},confirmButton={TextButton(enabled=!busy,onClick={context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_TEXT,share.url)},"分享 Vocab 教材"))}){Text("分享網址")}},dismissButton={TextButton(enabled=!busy,onClick={published=null}){Text("關閉")}})
     }

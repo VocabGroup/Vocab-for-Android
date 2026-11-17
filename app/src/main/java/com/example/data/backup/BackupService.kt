@@ -43,6 +43,7 @@ class BackupService(
             .put("format", "vocab-backup")
             .put("version", 8)
             .put("exportedAt", System.currentTimeMillis())
+            .put("courseDesign",com.example.data.settings.CourseCoverStore(context).exportDesign())
             .put("decks", JSONArray().apply {
                 decks.forEach { deck ->
                     put(JSONObject()
@@ -157,6 +158,7 @@ class BackupService(
     suspend fun importJson(uri: Uri): Int = withContext(Dispatchers.IO) {
         val text = context.contentResolver.openInputStream(uri)!!.bufferedReader().use { it.readText() }
         val root = JSONObject(text)
+        com.example.data.settings.CourseCoverStore(context).validateDesign(root.optJSONArray("courseDesign"))
         require(root.optString("format") in setOf("vocab-backup", "vocabpulse-backup")) {
             "不是 Vocab 備份檔"
         }
@@ -368,6 +370,7 @@ class BackupService(
                 ))
             }
         }
+        com.example.data.settings.CourseCoverStore(context).restoreDesign(root.optJSONArray("courseDesign"))
         studyCheckInStore.merge(
             (0 until checkInItems.length()).mapNotNull { index ->
                 runCatching { LocalDate.parse(checkInItems.optString(index)) }.getOrNull()

@@ -18,6 +18,13 @@ import java.io.File
 @Config(sdk = [36])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class CourseCoverStoreTest {
+    @Test fun emptyCourseAndCustomCoverSurviveBackupAndCanBeDeleted(){
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val store=CourseCoverStore(context);store.clear();store.set("空課程","#123ABC")
+        val backup=store.exportDesign();store.clear();store.restoreDesign(backup)
+        assertEquals(listOf("空課程"),store.courses());assertEquals("#123ABC",store.value("空課程"))
+        store.remove("空課程");assertTrue(CourseCoverStore(context).courses().isEmpty())
+    }
     @Test fun photoPersistsThroughReopeningAndRenamingAndResetRemovesPrivateCopy(): Unit = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = CourseCoverStore(context); store.clear()

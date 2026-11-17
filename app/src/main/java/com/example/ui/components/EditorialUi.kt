@@ -25,7 +25,7 @@ fun EditorialTopAppBar(
     actions: @Composable RowScope.() -> Unit = {},
     expandedHeight: Dp = 64.dp,
     windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
-    colors: TopAppBarColors = TopAppBarDefaults.topAppBarColors(),
+    colors: TopAppBarColors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
     scrollBehavior: TopAppBarScrollBehavior? = null
 ) {
     TopAppBar(
@@ -34,8 +34,7 @@ fun EditorialTopAppBar(
         navigationIcon = { Box(Modifier.padding(start = 6.dp), contentAlignment = Alignment.Center) { navigationIcon() } },
         actions = { Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, content = actions) },
         expandedHeight = expandedHeight.coerceAtLeast(60.dp), windowInsets = windowInsets,
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background, scrolledContainerColor = MaterialTheme.colorScheme.background,
-            titleContentColor = MaterialTheme.colorScheme.onBackground, navigationIconContentColor = MaterialTheme.colorScheme.onBackground, actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+        colors = colors,
         scrollBehavior = scrollBehavior
     )
 }

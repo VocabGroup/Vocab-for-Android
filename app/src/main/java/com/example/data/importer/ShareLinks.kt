@@ -13,7 +13,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 data class PublishedShare(val url:String,val id:String,val deleteToken:String,val expiresAt:Long)
-data class ReceivedShare(val folders:List<SharedFolder>,val expiresAt:Long)
+data class ReceivedShare(val folders:List<SharedFolder>,val expiresAt:Long,val kind:String="folder",val title:String="")
 object ShareLinks {
     const val ORIGIN = "https://vocab-adam.pages.dev"
     private val client=OkHttpClient.Builder().callTimeout(25,TimeUnit.SECONDS).followRedirects(false).build()
@@ -48,7 +48,8 @@ object ShareLinks {
         val value=json(Request.Builder().url("$ORIGIN/api/shares/${id(url)}").build())
         val expiry=value.getLong("expiresAt")
         require(expiry>System.currentTimeMillis()) {"分享已到期，請向分享者索取新連結"}
-        return ReceivedShare(FolderShare.parse(value.getJSONObject("share").toString()),expiry)
+        val share=value.getJSONObject("share")
+        return ReceivedShare(FolderShare.parse(share.toString()),expiry,share.optString("kind","folder"),share.optString("title",""))
     }
     suspend fun load(url:String):List<SharedFolder> = loadDetails(url).folders
     suspend fun revoke(share:PublishedShare){json(Request.Builder().url("$ORIGIN/api/shares/${id(share.url)}").header("Authorization","Bearer ${share.deleteToken}").delete().build())}

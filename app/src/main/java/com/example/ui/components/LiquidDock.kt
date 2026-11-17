@@ -47,7 +47,7 @@ data class LiquidDockTab(val label: String, val icon: ImageVector, val tag: Stri
 fun LiquidDock(
     tabs: List<LiquidDockTab>, selectedIndex: Int, onSelect: (Int) -> Unit,
     onSearch: () -> Unit, searchLabel: String, showLabels: Boolean,
-    pageLayer: GraphicsLayer, pagePosition: Offset, modifier: Modifier = Modifier
+    pageLayer: GraphicsLayer, pagePosition: Offset, modifier: Modifier = Modifier, actionIcon: ImageVector = Icons.Default.Search
 ) {
     val lift = remember { Animatable(0f) }
     var dragPosition by remember { mutableStateOf<Float?>(null) }
@@ -110,7 +110,7 @@ fun LiquidDock(
         }
         Box(Modifier.size(66.dp)) {
             GlassBackdrop(Modifier.matchParentSize(), pageLayer, pagePosition)
-            IconButton(onClick = onSearch, modifier = Modifier.fillMaxSize()) { Icon(Icons.Default.Search, searchLabel) }
+            IconButton(onClick = onSearch, modifier = Modifier.fillMaxSize()) { Icon(actionIcon, searchLabel) }
         }
     }
 }

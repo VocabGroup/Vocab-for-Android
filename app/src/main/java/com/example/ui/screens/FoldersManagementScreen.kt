@@ -9,6 +9,9 @@ import androidx.activity.compose.BackHandler
 import com.example.data.importer.SharedFolder
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,6 +54,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import com.example.ui.components.ModernOutlinedButton as OutlinedButton
@@ -67,6 +72,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.*
+import com.example.ui.components.SelectionAction
+import com.example.ui.components.SelectionIcons
+import com.example.data.WorkspaceTransferResult
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.ui.Alignment
@@ -107,7 +118,17 @@ fun FoldersManagementScreen(
     shareUndoIds:List<Long> = emptyList(),
     scanUndoCount:Int=0,
     onUndoScan:()->Unit={},
+    selectedCourse:String?=null,
+    onCourseSelected:((String?)->Unit)?=null,
+    addRequested:Boolean=false,
+    onAddHandled:()->Unit={},
+    onSearch:()->Unit={},
+    onSettings:()->Unit={},
+    onDeleteCourse:suspend(String)->Result<Unit> = {Result.failure(IllegalStateException("刪除尚未連接"))},
+    onTransfer:suspend(List<Long>,String,Boolean,Boolean)->Result<WorkspaceTransferResult> ={_,_,_,_->Result.failure(IllegalStateException("搬移尚未連接"))},
     showTopBar: Boolean = true,
+    showFloatingAdd:Boolean=true,
+    sharePublisher:suspend(String)->com.example.data.importer.PublishedShare=com.example.data.importer.ShareLinks::publish,
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
@@ -121,18 +142,42 @@ fun FoldersManagementScreen(
     var courseToRename by remember { mutableStateOf<String?>(null) }
     var renamedCourseValue by remember { mutableStateOf("") }
 
-    val courses = remember(decks) {
-        decks.map { it.category }.distinct().ifEmpty { listOf("通用課程") }
-    }
-    var selectedCourseFilter by remember { mutableStateOf<String?>(null) }
+    var localCourse by rememberSaveable{mutableStateOf<String?>(null)}
+    val selectedCourseFilter = if(onCourseSelected!=null)selectedCourse else localCourse
+    fun chooseCourse(course:String?){if(onCourseSelected!=null)onCourseSelected(course)else localCourse=course}
 
     var showAllFolders by rememberSaveable { mutableStateOf(false) }
     val coverContext = LocalContext.current
     val coverStore = remember(coverContext) { CourseCoverStore(coverContext) }
     var coverCourse by remember { mutableStateOf<String?>(null) }
     var coverRevision by remember { mutableStateOf(0) }
-    BackHandler(enabled = selectedCourseFilter != null || showAllFolders) { selectedCourseFilter = null; showAllFolders = false }
-    coverCourse?.let { course -> CourseCoverDialog(course, coverStore, { coverCourse = null }, { coverRevision++; coverCourse = null }) }
+    val courses = remember(decks,coverRevision) { (decks.map{it.category}+coverStore.courses()).distinct() }
+    LaunchedEffect(decks){decks.map{it.category}.distinct().forEach{coverStore.register(it)}}
+    var createCourse by remember{mutableStateOf(false)}
+    var deletingCourse by remember{mutableStateOf<String?>(null)}
+    var selectedIds by remember{mutableStateOf(setOf<Long>())}
+    var selecting by remember{mutableStateOf(false)}
+    var transferMode by remember{mutableStateOf<String?>(null)}
+    var transferTarget by remember{mutableStateOf<String?>(null)}
+    var busy by remember{mutableStateOf(false)}
+    var error by remember{mutableStateOf("")}
+    var deleteSelected by remember{mutableStateOf(false)}
+    val scope=rememberCoroutineScope()
+    fun transfer(target:String,overwrite:Boolean){scope.launch{busy=true;onTransfer(selectedIds.toList(),target,transferMode=="copy",overwrite).onSuccess{selectedIds=emptySet();selecting=false;transferMode=null;transferTarget=null}.onFailure{error=it.message?:"操作失敗"};busy=false}}
+    LaunchedEffect(addRequested){if(addRequested){showAddMenu=true;onAddHandled()}}
+    BackHandler(enabled = selecting || selectedCourseFilter != null || showAllFolders) { if(selecting){selecting=false;selectedIds=emptySet()}else{chooseCourse(null);showAllFolders=false} }
+    if(createCourse||coverCourse!=null){val original=coverCourse
+        CourseCoverDialog(original.orEmpty(),coverStore,{createCourse=false;coverCourse=null},{},create=createCourse,onDelete=original?.let{{deletingCourse=original}},onConfirm={name,cover->
+            require(name==original||name !in courses){"已有同名課程"}
+            fun finish(){coverStore.set(name,cover);coverRevision++;createCourse=false;coverCourse=null;chooseCourse(name)}
+            if(original!=null&&name!=original){if(decks.any{it.category==original})onRenameCourse(original,name){ok->if(ok){coverStore.rename(original,name);finish()}else error="重新命名失敗"}else{coverStore.rename(original,name);finish()}}else finish()
+        })
+    }
+    deletingCourse?.let{course->AlertDialog(onDismissRequest={if(!busy)deletingCourse=null},title={Text("刪除課程「$course」？")},text={Text("會一併刪除 ${decks.count{it.category==course}} 個資料夾與其中所有單字、學習紀錄，無法復原。")},confirmButton={TextButton(enabled=!busy,onClick={scope.launch{busy=true;onDeleteCourse(course).onSuccess{coverStore.remove(course);coverRevision++;deletingCourse=null;coverCourse=null;if(selectedCourseFilter==course)chooseCourse(null)}.onFailure{error=it.message?:"刪除失敗"};busy=false}}){Text(if(busy)"刪除中…" else "刪除課程",color=MaterialTheme.colorScheme.error)}},dismissButton={TextButton(enabled=!busy,onClick={deletingCourse=null}){Text("取消")}})}
+    if(transferMode!=null&&transferTarget==null)AlertDialog(onDismissRequest={if(!busy)transferMode=null},title={Text(if(transferMode=="copy")"複製到課程" else "移動到課程")},text={Column(Modifier.heightIn(max=420.dp).verticalScroll(rememberScrollState())){if(courses.none{it!=selectedCourse})Text("請先新增另一個課程，再搬移或複製。");courses.filter{it!=selectedCourse}.forEach{course->TextButton(enabled=!busy,onClick={val names=decks.filter{it.id in selectedIds}.map{it.name};if(decks.any{it.category==course&&it.name in names})transferTarget=course else transfer(course,false)}){Text(course)}}}},confirmButton={})
+    transferTarget?.let{target->AlertDialog(onDismissRequest={if(!busy)transferTarget=null},title={Text("發現同名資料夾")},text={Text("略過會保留原資料；覆蓋會以來源內容取代目標資料夾，目標相同單字的學習紀錄保留。")},confirmButton={TextButton(enabled=!busy,onClick={transfer(target,true)}){Text("覆蓋")}},dismissButton={TextButton(enabled=!busy,onClick={transfer(target,false)}){Text("略過")}})}
+    if(deleteSelected)AlertDialog(onDismissRequest={deleteSelected=false},title={Text("刪除 ${selectedIds.size} 個資料夾？")},text={Text("其中的單字與學習紀錄也會刪除，無法復原。")},confirmButton={TextButton(onClick={decks.filter{it.id in selectedIds}.forEach(onDeleteFolder);selectedIds=emptySet();selecting=false;deleteSelected=false}){Text("刪除")}},dismissButton={})
+    if(error.isNotEmpty())AlertDialog(onDismissRequest={error=""},title={Text("操作未完成")},text={Text(error)},confirmButton={})
     var shareCourse by remember { mutableStateOf<String?>(null) }
     val filteredDecks = decks
     val sourceDeckIds = filteredDecks.map { it.id }
@@ -166,7 +211,7 @@ fun FoldersManagementScreen(
         }
     }
 
-    if(showAddMenu){AlertDialog(onDismissRequest={showAddMenu=false},title={Text("新增資料夾")},text={Column{TextButton(onClick={showAddMenu=false;showAddDialog=true}){Text("建立資料夾")};TextButton(onClick={showAddMenu=false;importRequested=true}){Text("匯入分享檔案")}}},confirmButton={TextButton(onClick={showAddMenu=false}){Text("取消")}})}
+    if(showAddMenu){AlertDialog(onDismissRequest={showAddMenu=false},title={Text("新增教材")},text={Column{TextButton(onClick={showAddMenu=false;if(selectedCourseFilter==null)createCourse=true else showAddDialog=true}){Text(if(selectedCourseFilter==null)"建立課程" else "建立資料夾")};TextButton(onClick={showAddMenu=false;importRequested=true}){Text("匯入分享檔案")};TextButton(onClick={showAddMenu=false;importLinkRequested=true}){Text("匯入分享網址")}}},confirmButton={})}
     if(confirmUndoScan){AlertDialog(onDismissRequest={confirmUndoScan=false},title={Text("撤回上次單字匯入？")},text={Text("移除該批新字卡與後續修改，原有字卡保留。")},confirmButton={TextButton(onClick={confirmUndoScan=false;onUndoScan()}){Text("撤回")}},dismissButton={TextButton(onClick={confirmUndoScan=false}){Text("取消")}})}
     if (showAddDialog) {
         AddFolderDialog(
@@ -234,7 +279,7 @@ fun FoldersManagementScreen(
                     onClick = {
                         val newName = renamedCourseValue.trim()
                         onRenameCourse(originalName, newName) { success ->
-                            if (success) { coverStore.rename(originalName, newName); coverRevision++; selectedCourseFilter = newName }
+                            if (success) { coverStore.rename(originalName, newName); coverRevision++; chooseCourse(newName) }
                             courseToRename = null
                         }
                     },
@@ -253,23 +298,33 @@ fun FoldersManagementScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (showTopBar) TopAppBar(
+            if(selecting)Surface(color=Color(0xFF903A43)){Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                SelectionAction(Icons.Default.Close,"結束多選"){selecting=false;selectedIds=emptySet()}
+                Text("已選 ${selectedIds.size}",Modifier.weight(1f),color=Color.White,maxLines=1)
+                SelectionAction(SelectionIcons.All,"全選"){val ids=decks.filter{selectedCourseFilter==null||it.category==selectedCourseFilter}.map{it.id}.toSet();selectedIds=if(selectedIds.containsAll(ids))emptySet()else ids}
+                SelectionAction(Icons.Default.ContentCopy,"複製",selectedIds.isNotEmpty()){transferMode="copy"}
+                SelectionAction(Icons.Default.DriveFileMove,"移動",selectedIds.isNotEmpty()){transferMode="move"}
+                SelectionAction(Icons.Default.Delete,"刪除",selectedIds.isNotEmpty()){deleteSelected=true}
+            }}else if (showTopBar) TopAppBar(
                 expandedHeight = 48.dp,
-                windowInsets = WindowInsets(0, 0, 0, 0),
+                windowInsets = TopAppBarDefaults.windowInsets,
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("教材庫", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text(selectedCourseFilter?:"我的課程", maxLines=1,overflow=TextOverflow.Ellipsis,style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     }
                 },
+                navigationIcon={if(selectedCourseFilter!=null)IconButton(onClick={chooseCourse(null)}){Icon(Icons.Default.ArrowBack,"返回所有課程")}},
                 actions = {
-                    IconButton(onClick = onOpenAssistant) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = "Vocab AI")
+                    IconButton(onClick=onSearch){Icon(Icons.Default.Search,"搜尋")}
+                    if(selectedCourseFilter==null)IconButton(onClick=onSettings){Icon(Icons.Default.Settings,"設定")}else{
+                        IconButton(onClick={shareCourse=selectedCourseFilter}){Icon(Icons.Default.Share,"分享課程")}
+                        IconButton(onClick={selecting=true}){Icon(SelectionIcons.Multiple,"多選資料夾")}
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
-        floatingActionButton = {
+        floatingActionButton = { if(showFloatingAdd&&!selecting){
             FloatingActionButton(
                 onClick = { showAddMenu = true },
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -279,11 +334,11 @@ fun FoldersManagementScreen(
             ) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = "新增資料夾")
             }
-        },
+        } },
         modifier = modifier
     ) { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
-        FolderSharingPanel(decks,allCards,selectedCourseFilter,shareDeckId,{shareDeckId=null},importRequested,{importRequested=false},onImportShare,onUndoShare,shareUndoIds,requestCourse=shareCourse,onCourseRequestHandled={shareCourse=null},showActions=false,importLinkRequested=importLinkRequested,onLinkRequestHandled={importLinkRequested=false})
+        FolderSharingPanel(decks,allCards,selectedCourseFilter,shareDeckId,{shareDeckId=null},importRequested,{importRequested=false},onImportShare,onUndoShare,shareUndoIds,requestCourse=shareCourse,onCourseRequestHandled={shareCourse=null},showActions=false,importLinkRequested=importLinkRequested,onLinkRequestHandled={importLinkRequested=false},publishShare=sharePublisher)
         LazyColumn(
             state = folderListState,
             modifier = Modifier
@@ -297,16 +352,10 @@ fun FoldersManagementScreen(
         ) {
             item {
                 if(scanUndoCount>0)TextButton(onClick={confirmUndoScan=true}){Text("撤回上次單字匯入（$scanUndoCount 字）")}
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(selectedCourseFilter ?: if (showAllFolders) "全部資料夾" else "我的課程", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(top = 12.dp))
-                    if (selectedCourseFilter != null || showAllFolders) TextButton(onClick = { selectedCourseFilter = null; showAllFolders = false }) { Text("返回課程") }
-                    else TextButton(onClick = { showAllFolders = true }) { Text("全部資料夾") }
-                }
-                TextButton(onClick={importLinkRequested=true}) { Text("匯入分享網址") }
 
             }
 
-            if (displayedDecks.isEmpty()) {
+            if (courses.isEmpty() || (selectedCourseFilter!=null&&displayedDecks.none{it.category==selectedCourseFilter})) {
                 item {
                     CalmEmptyState(
                         icon = Icons.Default.Folder,
@@ -322,7 +371,7 @@ fun FoldersManagementScreen(
                             val count = allCards.count { card -> courseDecks.any { it.id == card.deckId } }
                             val cover = remember(course, coverRevision) { coverStore.value(course) }
                             CourseBook(course, "${courseDecks.size} 個資料夾 · $count 字", cover, coverStore,
-                                onOpen = { selectedCourseFilter = course }, onCover = { coverCourse = course }, modifier = Modifier.weight(1f))
+                                onOpen = { chooseCourse(course) }, onCover = { coverCourse = course }, modifier = Modifier.weight(1f))
                         }
                         if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
@@ -330,12 +379,6 @@ fun FoldersManagementScreen(
                 courses.filter { showAllFolders || it == selectedCourseFilter }.forEach { course ->
                     item(key = "course:$course") {
                         if (showAllFolders) Text(course, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Row {
-                            IconButton(onClick = { shareCourse = course }) { Icon(Icons.Default.Share, "分享課程") }
-                            IconButton(onClick = { selectedCourseFilter = course; showAddMenu = true }) { Icon(Icons.Default.Add,"新增教材") }
-                            IconButton(onClick = { coverCourse = course }) { Icon(Icons.Default.PhotoLibrary, "自訂課程封面") }
-                            IconButton(onClick = { renamedCourseValue = course; courseToRename = course }) { Icon(Icons.Default.Edit, "重新命名課程") }
-                        }
                     }
                     itemsIndexed(displayedDecks.filter { it.category == course }, key = { _, deck -> deck.id }) { _, deck ->
                     val deckCards = allCards.filter { it.deckId == deck.id }
@@ -352,8 +395,11 @@ fun FoldersManagementScreen(
                     ReorderableItem(
                         state = folderReorderState,
                         key = deck.id
-                    ) {
-ModernCollectionRow(title = deck.name, subtitle = "", count = totalCardCount, due = dueCount.takeIf { it > 0 }, progress = if (totalCardCount > 0) masteredCount.toFloat() / totalCardCount else null, onManage = { onOpenCardList(deck.id) }, onLearn = { onJumpToStudy(deck.id) }, onQuiz = { onJumpToQuiz(deck.id) }, onEdit = { editingDeck = deck }, onDelete = { deckToDelete = deck }, onShare = { shareDeckId = deck.id }, dragModifier = Modifier.draggableHandle())
+                    ) { dragging ->
+                        Surface(shape=RoundedCornerShape(20.dp),shadowElevation=if(dragging)12.dp else 0.dp,color=if(dragging||deck.id in selectedIds)MaterialTheme.colorScheme.surfaceVariant else Color.Transparent){Row(verticalAlignment=Alignment.CenterVertically){
+                            if(selecting)IconButton(onClick={selectedIds=if(deck.id in selectedIds)selectedIds-deck.id else selectedIds+deck.id},modifier=Modifier.padding(start=12.dp).size(44.dp)){Icon(if(deck.id in selectedIds)Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,"選取資料夾",tint=if(deck.id in selectedIds)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)}
+                            ModernCollectionRow(title = deck.name, subtitle = "", count = totalCardCount, due = dueCount.takeIf { it > 0 }, progress = if (totalCardCount > 0) masteredCount.toFloat() / totalCardCount else null, onManage = { if(selecting)selectedIds=if(deck.id in selectedIds)selectedIds-deck.id else selectedIds+deck.id else onOpenCardList(deck.id) }, onLearn = { onJumpToStudy(deck.id) }, onQuiz = { onJumpToQuiz(deck.id) }, onEdit = { editingDeck = deck }, onDelete = { deckToDelete = deck }, onShare = { shareDeckId = deck.id }, dragModifier = if(selecting)null else Modifier.draggableHandle(),onLongClick={selecting=true;selectedIds=selectedIds+deck.id},selectionMode=selecting,modifier=Modifier.weight(1f))
+                        }}
                     }
                 }
             }

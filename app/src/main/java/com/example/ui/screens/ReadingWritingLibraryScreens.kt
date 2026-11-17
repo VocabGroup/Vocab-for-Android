@@ -59,10 +59,13 @@ fun ReadingLibraryScreen(
     onGenerateTopic: (String) -> Unit,
     onImport: (String) -> Unit,
     onRecognizeSources: suspend (List<Uri>) -> GrammarWritingScanResult,
-    onOpenArticle: (AssistantMessage) -> Unit
+    onOpenArticle: (AssistantMessage) -> Unit,
+    addRequested:Boolean=false,onAddHandled:()->Unit={}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var showAddMenu by remember {mutableStateOf(false)}
+    LaunchedEffect(addRequested){if(addRequested){showAddMenu=true;onAddHandled()}}
     var chooseDeck by remember { mutableStateOf(false) }
     var showGenerate by remember { mutableStateOf(false) }
     var showImport by remember { mutableStateOf(false) }
@@ -107,6 +110,7 @@ fun ReadingLibraryScreen(
             .getOrNull()?.addOnSuccessListener { scanner.launch(IntentSenderRequest.Builder(it).build()) }
             ?.addOnFailureListener { importError = it.message ?: "無法開啟掃描器" }
     }
+    if(showAddMenu) AlertDialog(onDismissRequest={showAddMenu=false},title={Text("新增文章")},text={Column{TextButton(onClick={showAddMenu=false;showGenerate=true}){Text("AI 產生文章")};TextButton(onClick={showAddMenu=false;showImport=true}){Text("貼上文字／匯入檔案或圖片")}}},confirmButton={})
     if (chooseDeck) AlertDialog(
         onDismissRequest = { chooseDeck = false },
         title = { Text("用哪個資料夾產生文章？") },
@@ -172,12 +176,6 @@ fun ReadingLibraryScreen(
     ) {
         item {
             com.example.ui.components.EditorialHeading("文章閱讀", "選擇文章開始閱讀，點文字即可查字與建立單字卡。")
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = { showGenerate = true }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.AutoAwesome, null); Text("AI 產生") }
-                OutlinedButton(onClick = { showImport = true }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.FileOpen, null); Text("匯入文章") }
-            }
         }
         item { com.example.ui.components.CalmSectionHeader("我的文章") }
         if (articleMessages.isEmpty()) item { CalmEmptyState(Icons.Default.Article, "還沒有文章", "可由單字資料夾產生文章，或匯入自己的內容。") }

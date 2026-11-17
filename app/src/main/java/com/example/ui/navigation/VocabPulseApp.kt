@@ -148,10 +148,14 @@ fun VocabApp(
     val grammarLibraries by viewModel.grammarLibraries.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableIntStateOf(0) }
+    var libraryCourse by rememberSaveable {mutableStateOf<String?>(null)}
+    var workspaceAdd by remember {mutableStateOf(false)}
     var editingCard by remember { mutableStateOf<Flashcard?>(null) }
     var pendingRevealCardId by remember { mutableStateOf<Long?>(null) }
     var pendingSharedText by remember { mutableStateOf<String?>(null) }
+    var outgoingShareDeckId by remember{mutableStateOf<Long?>(null)}
     var pendingShareUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var previewShareUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingQuizDeckIds by remember { mutableStateOf<Set<Long>?>(null) }
     var pendingQuizTitle by remember { mutableStateOf("") }
     var reviewDeckIds by remember { mutableStateOf<Set<Long>?>(null) }
@@ -199,7 +203,7 @@ fun VocabApp(
 
     if (!settingsLoaded) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+            com.example.ui.components.VocabLoading()
         }
         return
     }
@@ -236,7 +240,7 @@ fun VocabApp(
             performWorldSwitch(false)
             val shareUrl = com.example.data.importer.ShareLinks.canonicalUrl(sharedText)
             if (shareUrl != null) {
-                pendingShareUrl = shareUrl
+                previewShareUrl = shareUrl
             } else {
                 pendingSharedText = sharedText
                 editingCard = null
@@ -246,9 +250,11 @@ fun VocabApp(
         }
     }
 
+    previewShareUrl?.let{url->com.example.ui.components.SharedMaterialPreview(url,onClose={previewShareUrl=null},onGet={previewShareUrl=null;pendingShareUrl=url})}
     com.example.ui.components.FolderSharingPanel(
         decks = decks, cards = allCards, course = null, showActions = false,
         onImport = viewModel::importSharedFolders, onUndo = viewModel::undoSharedFolders,
+        requestDeckId=outgoingShareDeckId,onRequestHandled={outgoingShareDeckId=null},
         requestLink = pendingShareUrl, onRequestLinkHandled = { pendingShareUrl = null },
         onOpenImported = { id -> viewModel.selectDeck(id); navController.navigate(Routes.CARD_LIST) { launchSingleTop = true } }
     )
@@ -300,6 +306,8 @@ fun VocabApp(
                     currentTab = it
                 },
                 showBottomNavigation = grammarMode || !quizGameActive,
+                onPrimaryAdd={workspaceAdd=true},
+                onLibraryNavigation={libraryCourse=null},
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 onOpenWordSearch = { navController.navigate(if (grammarMode) Routes.GRAMMAR_SEARCH else Routes.WORD_LOOKUP) },
                 grammarMode = grammarMode,
@@ -343,6 +351,7 @@ fun VocabApp(
                             onSeeAllNotes = { currentTab = 1 }
                         )
                     } else DashboardScreen(
+                        onOpenLibrary={libraryCourse=null;currentTab=1},
                         decks = decks,
                         allCards = allCards,
                         dueCards = dueCards,
@@ -359,11 +368,7 @@ fun VocabApp(
                             reviewScopeId = id ?: 0L
                         },
                         onAddFolder = viewModel::addFolder,
-                        onStartReview = {
-                            reviewDeckIds = null
-                            reviewScopeId = selectedDeckId ?: 0L
-                            navController.navigate(Routes.REVIEW)
-                        },
+                        onStartReview = {libraryCourse=null;currentTab=1},
                         onOpenAddCard = {
                             editingCard = null
                             navController.navigate(Routes.ADD_EDIT_CARD)
@@ -390,7 +395,7 @@ fun VocabApp(
                             viewModel.openAssistant(deckId)
                             navController.navigate(Routes.GENERATED_READING) { launchSingleTop = true }
                             viewModel.sendAssistantMessage(
-                                "請根據資料夾「$deckName」產生一篇自然的互動閱讀文章，盡量使用資料夾內的目標單字，並附完整繁體中文翻譯、逐句翻譯與 5 題閱讀測驗。"
+                                "請根據資料夾「$deckName」產生一篇自然的互動閱讀文章，使用資料夾內全部目標單字，不可只挑選部分單字，並附完整繁體中文翻譯、逐句翻譯與 5 題閱讀測驗。"
                             )
                         },
                         onOpenStudyCalendar = { navController.navigate(Routes.STUDY_CALENDAR) },
@@ -423,6 +428,13 @@ fun VocabApp(
                             }
                         )
                     } else FoldersManagementScreen(
+                        selectedCourse=libraryCourse,onCourseSelected={libraryCourse=it},
+                        addRequested=workspaceAdd&&currentTab==1,onAddHandled={workspaceAdd=false},
+                        onSearch={navController.navigate(Routes.WORD_LOOKUP)},
+                        onTransfer=viewModel::transferSelectedFolders,
+                        onDeleteCourse=viewModel::deleteCourseAndContents,
+                        showFloatingAdd=false,
+                        onSettings={navController.navigate(Routes.SETTINGS)},
                         decks = decks,
                         allCards = allCards,
                         onAddFolder = viewModel::addFolder,
@@ -457,7 +469,7 @@ fun VocabApp(
                             viewModel.openAssistant(null)
                             navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
                         },
-                        showTopBar = false
+                        showTopBar = true
                     )
                 },
                 studyContent = {
@@ -583,6 +595,7 @@ fun VocabApp(
                         )
                     } else {
                         ReadingLibraryScreen(
+                            addRequested=workspaceAdd&&currentTab==4,onAddHandled={workspaceAdd=false},
                             decks = decks,
                             articleMessages = savedArticles,
                             onGenerate = { deck ->
@@ -590,7 +603,7 @@ fun VocabApp(
                                 readingStartedAt = System.currentTimeMillis()
                                 viewModel.openAssistant(deck.id)
                                 navController.navigate(Routes.GENERATED_READING)
-                                viewModel.sendAssistantMessage("請根據資料夾「${deck.name}」產生一篇自然的互動閱讀文章，優先使用待複習與不熟悉的目標單字，附繁體中文逐句翻譯與 5 題閱讀理解。")
+                                viewModel.sendAssistantMessage("請根據資料夾「${deck.name}」產生一篇自然的互動閱讀文章，必須使用整個資料夾的所有目標單字，不可只挑選部分單字；生成後逐字核對，若太長就分章完成，附繁體中文逐句翻譯與 5 題閱讀理解。")
                             },
                             onGenerateTopic = { topic ->
                                 selectedArticleId = null
@@ -872,6 +885,8 @@ fun VocabApp(
                 onMoveCard = viewModel::moveCard,
                 onReorderCards = viewModel::reorderCards,
                 onMoveCards = viewModel::moveCards,
+                onTransfer=viewModel::transferSelectedWords,
+                onShareFolder={outgoingShareDeckId=it},
                 onCreateFolderAndMoveCards = viewModel::createFolderAndMoveCards,
                 onEditCard = { card ->
                     editingCard = card
@@ -917,7 +932,7 @@ fun VocabApp(
                 },
                 pronunciationWeakCardIds = pronunciationWeakCardIds,
                 onPronunciationResult = viewModel::recordPronunciationResult,
-                onBack = { navController.popBackStack() }
+                onBack = { libraryCourse=decks.firstOrNull{it.id==selectedDeckId}?.category;currentTab=1;navController.popBackStack() }
             )
         }
 
@@ -925,6 +940,7 @@ fun VocabApp(
             AddEditCardScreen(
                 editingCard = editingCard,
                 initialFocusCardId = editingCard?.id,
+                preferredDeckId=selectedDeckId,
                 initialSharedText = pendingSharedText,
                 allCards = allCards,
                 decks = decks,
@@ -943,6 +959,8 @@ fun VocabApp(
 
         composable(Routes.SETTINGS) {
             SettingsScreen(
+                onOpenQualityCheck={navController.navigate(Routes.QUALITY_CHECK)},
+                onOpenCalendar={navController.navigate(Routes.STUDY_CALENDAR)},
                 settings = settings,
                 onBooleanChange = viewModel::updateBooleanSetting,
                 onIntChange = viewModel::updateIntSetting,

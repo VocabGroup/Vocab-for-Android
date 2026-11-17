@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Quiz
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Spellcheck
@@ -101,6 +102,8 @@ fun MainScreen(
     libraryToolContent: @Composable () -> Unit = {},
     onOpenAssistant: () -> Unit = {},
     onOpenWordSearch: () -> Unit = {},
+    onPrimaryAdd: () -> Unit = {},
+    onLibraryNavigation: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     grammarMode: Boolean = false,
     onToggleGrammarMode: () -> Unit = {},
@@ -122,10 +125,10 @@ fun MainScreen(
     val tabs = listOf(
         MainTabSpec("今天", Icons.Default.Home, "今天", "nav_tab_home"),
         MainTabSpec("教材庫", Icons.Default.Folder, "教材庫", "nav_tab_folders"),
-        MainTabSpec("練習", Icons.Default.Style, "練習", "nav_tab_study"),
+        MainTabSpec(if(grammarMode)"作文" else "文章", Icons.Default.Article, "文章", "nav_tab_articles"),
         MainTabSpec("AI", Icons.Default.AutoAwesome, "Vocab AI", "nav_tab_ai")
     )
-    val selectedNavigation = when(pagerState.currentPage) { 0 -> 0; 1,4 -> 1; else -> 2 }
+    val selectedNavigation = when(pagerState.currentPage) { 0 -> 0; 4 -> 2; else -> 1 }
 
     LaunchedEffect(currentTab) {
         if (pagerState.currentPage != currentTab) {
@@ -146,7 +149,7 @@ fun MainScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (showBottomNavigation) {
+            if (showBottomNavigation && (grammarMode || pagerState.currentPage != 1)) {
                 TopAppBar(
                     expandedHeight = 48.dp,
                     windowInsets = TopAppBarDefaults.windowInsets,
@@ -187,13 +190,7 @@ fun MainScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = onOpenAssistant) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = "Vocab AI",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                        if(pagerState.currentPage!=0) IconButton(onClick=onOpenWordSearch){Icon(Icons.Default.Search,"搜尋")}
                         IconButton(onClick = onOpenSettings) {
                             Box {
                                 Icon(
@@ -222,15 +219,7 @@ fun MainScreen(
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
         Column(Modifier.fillMaxSize()) {
-            if(pagerState.currentPage in 1..4) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if(pagerState.currentPage == 1 || pagerState.currentPage == 4) {
-                    TextButton(onClick = { onTabSelected(1) }) { Text(if(grammarMode) "文法庫" else "單字資料夾") }
-                    TextButton(onClick = { onTabSelected(4) }, modifier = Modifier.testTag("nav_tab_library_tool")) { Text(if(grammarMode) "作文" else "文章") }
-                } else {
-                    TextButton(onClick = { onTabSelected(2) }) { Text("翻卡學習") }
-                    TextButton(onClick = { onTabSelected(3) }, modifier = Modifier.testTag("nav_tab_quiz")) { Text("測驗練習") }
-                }
-            }
+            if(showBottomNavigation && pagerState.currentPage in 2..3) Row(Modifier.fillMaxWidth().padding(horizontal=16.dp)) { TextButton(onClick={onTabSelected(2)}){Text("翻卡學習")};TextButton(onClick={onTabSelected(3)},modifier=Modifier.testTag("nav_tab_quiz")){Text("測驗練習")} }
         HorizontalPager(
             state = pagerState,
             userScrollEnabled = false,
@@ -264,9 +253,10 @@ fun MainScreen(
                 LiquidDock(
                     tabs = tabs.map { LiquidDockTab(it.label, it.icon, it.testTag) },
                     selectedIndex = selectedNavigation,
-                    onSelect = { if (it == 3) onOpenAssistant() else onTabSelected(it) },
-                    onSearch = onOpenWordSearch,
-                    searchLabel = if (grammarMode) "搜尋文法" else "搜尋英文單字",
+                    onSelect = { if (it == 3) onOpenAssistant() else {if(it==1)onLibraryNavigation();onTabSelected(if(it==2)4 else it)} },
+                    onSearch = {if(!grammarMode && pagerState.currentPage in listOf(1,4)) onPrimaryAdd() else onOpenWordSearch()},
+                    searchLabel = if(!grammarMode && pagerState.currentPage in listOf(1,4)) "新增" else if (grammarMode) "搜尋文法" else "搜尋英文單字",
+                    actionIcon = if(!grammarMode && pagerState.currentPage in listOf(1,4)) Icons.Default.Add else Icons.Default.Search,
                     showLabels = showNavigationLabels,
                     pageLayer = pageLayer,
                     pagePosition = pagePosition,
